@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "CivicFix",
+    "slug": "civicfix",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -13,9 +13,11 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.civicfix.app"
     },
     "android": {
+      "package": "com.civicfix.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -40,9 +42,6 @@
           "locationWhenInUsePermission": "Allow CivicFix to access your location to pin issues near you."
         }
       ]
-    ],
-    "extra": {
-      "apiUrl": "http://192.168.x.x:5000/api"
-    }
+    ]
   }
 }
