@@ -11,21 +11,38 @@ dotenv.config();
 
 const app = express();
 
-// Define CORS options
+// CORS is configurable so development can remain convenient while production
+// deployments can restrict browser access to trusted frontend origins.
+const configuredOrigins = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const corsOptions = {
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  origin: (origin, callback) => {
+    // Allow non-browser requests and local development when no allow-list is
+    // configured. In production, set CORS_ORIGINS explicitly.
+    if (!origin || configuredOrigins.length === 0) {
+      return callback(null, true);
+    }
+
+    if (configuredOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error('Origin not allowed by CORS'));
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 };
 
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve uploaded images statically
+// Serve uploaded images statically.
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Root route
 app.get('/', (req, res) => {
   res.send('CivicFix Backend running');
 });
@@ -47,9 +64,7 @@ const startServer = async () => {
     await sequelize.sync();
 
     app.listen(PORT, '0.0.0.0', () => {
-      console.log(
-        `🚀 Server is running on port ${PORT} (listening on 0.0.0.0)`
-      );
+      console.log(`🚀 Server is running on port ${PORT} (listening on 0.0.0.0)`);
     });
   } catch (error) {
     console.error('Failed to start server:', error.message);
