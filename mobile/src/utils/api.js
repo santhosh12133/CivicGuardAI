@@ -1,15 +1,21 @@
 import axios from "axios";
 
+// Prefer Expo public environment configuration so the app does not depend on
+// a developer's machine-specific LAN address. Set EXPO_PUBLIC_API_URL in the
+// mobile environment when running against a local, tunnel, or deployed API.
+const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
 const DEV_SERVER_IP = "10.47.147.234";
 const PORT = 5000;
 
-export const API_BASE_URL = `http://${DEV_SERVER_IP}:${PORT}`;
+export const API_BASE_URL = (
+  configuredApiUrl || `http://${DEV_SERVER_IP}:${PORT}`
+).replace(/\/$/, "");
 
 console.log("🌐 Using backend at:", API_BASE_URL);
 
 const api = axios.create({
-  baseURL: API_BASE_URL.replace(/\/$/, ""),
-  timeout: 30000, // Increased from 10s to 30s to accommodate geocoding retries
+  baseURL: API_BASE_URL,
+  timeout: 30000,
   headers: {
     Accept: "application/json",
   },
@@ -17,14 +23,12 @@ const api = axios.create({
 
 // Debug: log the API base so we can verify the app is using the correct host
 try {
-  // eslint-disable-next-line no-console
   console.log("[api] API_BASE_URL =", API_BASE_URL);
 } catch (e) {}
 
-// Log outgoing requests for easier debugging on device
+// Add the current JWT to authenticated requests.
 api.interceptors.request.use((config) => {
   try {
-    // eslint-disable-next-line no-console
     console.log(
       "[api] request",
       config.method,
@@ -35,37 +39,12 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Detailed response error logging to help diagnose network issues on device
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    try {
-      // eslint-disable-next-line no-console
-      console.log("[api] response error", {
-        message: error.message,
-        code: error.code,
-        config: error.config && {
-          method: error.config.method,
-          url: error.config.url,
-        },
-        response: error.response && {
-          status: error.response.status,
-          data: error.response.data,
-        },
-      });
-    } catch (e) {}
-    return Promise.reject(error);
-  }
-);
-
-// Quick startup probe to /health so we can see connectivity immediately in device logs
+// Quick startup probe to /health so connectivity is visible in device logs.
 (async () => {
   try {
     const res = await api.get("/health");
-    // eslint-disable-next-line no-console
     console.log("[api] health ok", res.data);
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.log("[api] health check failed", err.message || err);
   }
 })();
@@ -81,7 +60,6 @@ export const setAuthToken = (token) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Handle network errors (no response from server)
     if (!error.response) {
       if (error.code === "ECONNABORTED") {
         return Promise.reject(
@@ -89,59 +67,47 @@ api.interceptors.response.use(
         );
       }
       if (error.message === "Network Error" || error.code === "ERR_NETWORK") {
-        const apiUrl = API_BASE_URL;
         return Promise.reject(
           new Error(
-            `Cannot connect to server at ${apiUrl}. ` +
-              "Please ensure:\n" +
-              "1. Backend server is running (npm run dev)\n" +
-              "2. Tunnel is running if using localtunnel (npm run tunnel)\n" +
-              "3. Check your internet connection"
+            `Cannot connect to server at ${API_BASE_URL}. ` +
+              "Please ensure the backend is running and the configured API URL is reachable."
           )
         );
       }
       return Promise.reject(new Error(`Connection error: ${error.message}`));
     }
 
-    // Handle HTTP status codes
     const { data, status } = error.response;
 
-    // Handle 503 Service Unavailable
+    if (status === 401) {
+      // Let AuthContext/screens decide whether and how to clear the session.
+      // Do not silently mutate authentication state from this generic client.
+      return Promise.reject(new Error(data?.message || "Authentication failed"));
+    }
+
     if (status === 503) {
       return Promise.reject(
         new Error(
-          "Service unavailable (503). " +
-            "The backend server may be down or overloaded. " +
-            "Please check if the server is running."
+          "Service unavailable (503). The backend server may be down or overloaded."
         )
       );
     }
 
-    // Handle 404 Not Found
     if (status === 404) {
       return Promise.reject(
         new Error(
-          `Endpoint not found (404). ` +
-            `Check if the API URL is correct: ${API_BASE_URL}`
+          `Endpoint not found (404). Check the API URL: ${API_BASE_URL}`
         )
       );
     }
 
-    // Handle validation errors (express-validator format)
     if (data?.errors && Array.isArray(data.errors) && data.errors.length > 0) {
-      // Extract validation error messages
-      const errorMessages = data.errors.map((err) => {
-        // express-validator uses 'msg' property
-        return (
-          err.msg ||
-          err.message ||
-          `${err.param}: ${err.msg || "validation failed"}`
-        );
-      });
+      const errorMessages = data.errors.map(
+        (err) => err.msg || err.message || "Validation failed"
+      );
       return Promise.reject(new Error(errorMessages.join(". ")));
     }
 
-    // Handle standard error messages
     const message =
       data?.message || data?.error || `Request failed with status ${status}`;
     return Promise.reject(new Error(message));
