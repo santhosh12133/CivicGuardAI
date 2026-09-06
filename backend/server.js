@@ -12,6 +12,7 @@ dotenv.config();
 
 const app = express();
 const isProduction = process.env.NODE_ENV === 'production';
+const allowDatabaseSync = process.env.DB_SYNC === 'true';
 app.disable('x-powered-by');
 if (isProduction) app.set('trust proxy', 1);
 
@@ -67,7 +68,13 @@ const startServer = async () => {
     if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) throw new Error('JWT_SECRET must be configured with at least 32 characters');
     if (isProduction && configuredOrigins.length === 0) throw new Error('CORS_ORIGINS must be configured in production');
     await connectDB();
-    if (!isProduction) await sequelize.sync();
+
+    // This project currently has no migration runner. Production keeps sync disabled by
+    // default; DB_SYNC=true is an explicit bootstrap switch for first deployment.
+    if (!isProduction || allowDatabaseSync) {
+      await sequelize.sync();
+    }
+
     app.listen(PORT, '0.0.0.0', () => console.log(`CivicFix API listening on port ${PORT}`));
   } catch (error) {
     console.error('Failed to start server:', error.message);
