@@ -1,149 +1,293 @@
 # CivicFix Project
 
-This project consists of three main parts:
+CivicFix is a civic issue reporting platform built around three applications:
 
-- `backend/`: A Node.js and Express server to handle API requests.
-- `admin/`: A web-based admin dashboard (details to be added).
-- `mobile/`: A React Native (Expo) mobile application for users to report issues.
+- `backend/` — Node.js + Express API for authentication, authorization, issue management, and PostgreSQL/PostGIS persistence.
+- `admin/` — web-based administration dashboard for managing civic issues and users.
+- `mobile/` — React Native (Expo) application for citizens to authenticate and report civic issues.
+
+## Architecture Overview
+
+```text
+Citizen Mobile App / Admin Dashboard
+                |
+                | HTTP + JSON
+                | Authorization: Bearer <JWT>
+                v
+        Node.js + Express API
+                |
+        +-------+--------+
+        |                |
+   Auth Middleware   Issue Routes
+        |                |
+        +-------+--------+
+                |
+          PostgreSQL / PostGIS
+```
+
+The backend exposes the `/api/auth` and `/api/issues` route groups. Authentication uses JSON Web Tokens (JWT), while passwords are hashed with `bcryptjs` before storage. Role-based authorization is enforced by backend middleware rather than by the client applications. citebackend-controller
+
+## Authentication & Authorization
+
+### Authentication components
+
+The authentication implementation is split across the following components:
+
+| Component | Responsibility |
+|---|---|
+| `backend/src/routes/authRoutes.js` | Defines registration, login, and admin-only user-list endpoints and validates incoming fields. |
+| `backend/src/controllers/authController.js` | Hashes passwords during registration, verifies passwords during login, creates JWTs, and returns a sanitized user object. |
+| `backend/src/middleware/authMiddleware.js` | Reads the `Authorization` header, verifies the JWT signature/expiry, attaches the decoded claims to `req.user`, and enforces roles. |
+| `mobile/src/context/AuthContext.js` | Manages the mobile login/register/logout lifecycle and persists the session locally. |
+| `mobile/src/utils/api.js` | Configures Axios and adds the JWT as a Bearer token to authenticated API requests. |
+| `backend/server.js` | Registers the authentication route group under `/api/auth` and enables the `Authorization` header through CORS. |
+
+### Credentials and password handling
+
+Passwords are **not stored as plaintext**. During registration, the backend hashes the supplied password with `bcrypt.hash(password, 10)` and stores the resulting hash. During login, the supplied password is checked with `bcrypt.compare(...)`. citebackend-controller
+
+Registration is intentionally limited to the `citizen` role. Although the request validator recognizes `citizen`, `staff`, and `admin`, the controller rejects non-citizen registrations on the public registration route. citebackend-auth-routes citebackend-controller
+
+The backend also rejects duplicate email addresses and returns a generic `Invalid credentials` response when login fails, avoiding separate messages for an unknown user versus an incorrect password. citebackend-controller
+
+### JWT creation
+
+After a successful registration or login, the backend creates a JWT containing:
+
+```text
+{
+  userId,
+  role
+}
+```
+
+The token is signed with the server-side `JWT_SECRET` environment variable and configured to expire after **12 hours**. The secret itself should never be committed to source control or exposed to clients. citebackend-controller
+
+### Request flow
+
+```text
+1. User enters email/password
+        |
+        v
+2. Mobile app calls POST /api/auth/login
+        |
+        v
+3. authController finds the user by email
+        |
+        v
+4. bcrypt.compare() verifies the password hash
+        |
+        v
+5. Backend signs a JWT containing userId + role
+        |
+        v
+6. Backend returns { user, token }
+        |
+        v
+7. Mobile AuthContext stores the session
+        |
+        v
+8. api.js sets Authorization: Bearer <token>
+        |
+        v
+9. Protected backend routes verify the JWT
+        |
+        v
+10. Role middleware allows/denies the operation
+```
+
+The mobile application restores the stored token on startup and re-applies it to the Axios client. Logout clears the local token and user state and removes the authorization header. citemobile-auth-context citemobile-api
+
+### Protected routes and roles
+
+Authentication and authorization are enforced at the API layer:
+
+| Endpoint | Access |
+|---|---|
+| `POST /api/auth/register` | Public; citizen registration only |
+| `POST /api/auth/login` | Public |
+| `GET /api/auth/users` | `admin` only |
+| `POST /api/issues` | Authenticated user |
+| `GET /api/issues` | Public |
+| `GET /api/issues/:id` | Public |
+| `PUT /api/issues/:id` | `staff` or `admin` |
+| `DELETE /api/issues/:id` | `admin` only |
+
+Protected requests must include:
+
+```http
+Authorization: Bearer <JWT_TOKEN>
+```
+
+The middleware first checks that the header exists and starts with `Bearer `. It then verifies the token using `JWT_SECRET`. A missing token returns `401`, an invalid/expired token returns `401`, and an authenticated user without the required role returns `403`. citebackend-auth-middleware
+
+### Example authenticated request
+
+```bash
+curl http://localhost:5000/api/auth/users \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+An admin token is required because `/api/auth/users` is protected by both `authenticateToken` and `authorizeRoles('admin')`. citebackend-auth-routes
+
+## Environment & Secret Management
+
+The backend expects configuration through environment variables. At minimum:
+
+```env
+PORT=5000
+DATABASE_URL=postgres://<user>:<password>@<host>:<port>/<database>
+JWT_SECRET=<strong-random-secret>
+```
+
+Keep production secrets outside the repository. Do not place real passwords, JWT secrets, database credentials, or other sensitive values in README files, source code, or client-side bundles. The repository's backend documentation already uses environment variables for the database connection and JWT secret. citebackend-readme
 
 ## Development Setup
 
-To run this project in a local development environment, the mobile app needs to connect to the backend server running on your local machine.
+### Backend
 
-### Connecting the Mobile App to the Local Backend
+Prerequisites:
 
-When you switch to a different Wi-Fi network, your computer's local IP address will likely change. You must update the mobile app's configuration to point to the new IP address.
+- Node.js 18+
+- PostgreSQL
+- PostGIS extension (used by the project for geospatial data)
+- npm
 
-**Step 1: Find Your Local IP Address**
+Start the backend:
 
-1.  Open a Command Prompt or PowerShell on the Windows machine running the backend server.
-2.  Run the following command:
-    ```sh
-    ipconfig
-    ```
-3.  Look for the "IPv4 Address" under your active Wi-Fi network adapter. It will typically look like `192.168.x.x` or `10.x.x.x`.
-
-**Step 2: Update the Mobile App Configuration**
-
-1.  Open the following file in the mobile project: `mobile/src/utils/api.js`.
-2.  Find the line that defines `DEV_SERVER_IP`.
-3.  Replace the old IP address with the new one you found in Step 1.
-
-    ```javascript
-    // mobile/src/utils/api.js
-
-    // Replace this with your computer's current local IP address
-    const DEV_SERVER_IP = "YOUR_NEW_IP_ADDRESS_HERE";
-    const PORT = 5000;
-
-    export const API_BASE_URL = `http://${DEV_SERVER_IP}:${PORT}`;
-
-    // ... rest of the file
-    ```
-
-**Step 3: Relaunch the App**
-
-1.  Ensure your backend server is running.
-2.  Restart the Expo development server for the mobile app.
-3.  Relaunch the CivicFix app on your mobile device.
-
-**Important:** Your mobile device and your computer running the backend server **must** be connected to the same Wi-Fi network for this to work.
-
----
-
-## Troubleshooting Issue Upload Problems
-
-If you've updated the IP address but still can't upload issues, check these common problems:
-
-### Problem 1: Backend Server Not Running
-
-**Solution:** Make sure the backend server is running:
-
-```sh
+```bash
 cd backend
+npm install
 npm run dev
 ```
 
-The server should show: `🚀 Server is running on port 5000 (listening on 0.0.0.0)`
+The API runs on port `5000` by default. citebackend-readme
 
-### Problem 2: Windows Firewall Blocking Connections
+### Mobile app with local backend
 
-**Solution:** Add a firewall rule to allow Node.js:
+When testing the Expo application against a backend running on your computer, the mobile device must be able to reach that backend.
 
-```powershell
-# Run PowerShell as Administrator and execute:
-netsh advfirewall firewall add rule name="Node.js Server" dir=in action=allow protocol=TCP localport=5000
+1. Find the computer's local IPv4 address with:
+
+```sh
+ipconfig
 ```
 
-### Problem 3: Mobile Device Not on Same Network
+2. Update `mobile/src/utils/api.js` with the current development backend host when using the local-IP configuration.
+3. Keep the mobile device and development computer on the same network.
+4. Restart the Expo development server after changing the API endpoint.
 
-**Solution:** Ensure both your computer and mobile device are connected to the **exact same Wi-Fi network**. Check:
+The mobile API client centralizes the backend base URL and authentication header configuration. citemobile-api
 
-- Your computer's Wi-Fi network name
-- Your phone's Wi-Fi network name
-- They must match exactly
+### Localtunnel option
 
-### Problem 4: Photo EXIF Metadata Issues
+The backend README also documents using Localtunnel to expose the development API for mobile testing. The tunnel URL is temporary and should be treated as a development convenience, not as a production deployment architecture. citebackend-readme
 
-The backend validates photos for security and authenticity. Photos **must**:
+## Troubleshooting
 
-- Be taken with your device's camera app (not downloaded or edited photos)
-- Be less than 48 hours old
-- Have GPS location data enabled in your camera settings
-- Have EXIF metadata (camera make, model, timestamp)
+### Authentication token problems
 
-**Solution:**
+If a protected request starts returning `401 Invalid or expired token`, log out and sign in again to obtain a fresh JWT. The server validates the token on every protected request and does not provide a refresh-token endpoint in the current implementation. citebackend-auth-middleware citebackend-controller
 
-1. Enable Location Services for your Camera app
-2. Take a new photo directly with your device's camera
-3. Don't use photos from gallery that are old or edited
-4. Don't use screenshots or images downloaded from internet
+### Role/permission problems
 
-### Problem 5: GPS Location Validation
+A valid token is not enough for staff/admin operations. The JWT role claim must match the role required by the route. For example, issue deletion requires `admin`, while issue updates require `staff` or `admin`. citebackend-issue-routes
 
-The backend checks if the photo's GPS coordinates match your device's location (within 1km).
+### Network problems
 
-**Solution:**
+The mobile client contains diagnostics for backend connectivity, including timeout, network, and HTTP error handling. Check that the backend is running and that the mobile device is using a reachable API URL. citemobile-api
 
-- Take the photo at the same location where you're reporting the issue
-- Ensure GPS/Location is enabled on your device
-- Wait a few seconds for GPS to get accurate location before taking photo
+## Issue Validation & Photo Requirements
 
-### Problem 6: Authentication Token Issues
+The backend validates civic issue fields such as title, description, latitude, longitude, and status. Issue creation is authenticated, while staff/admin permissions are required for updates and admin permission is required for deletion. citebackend-issue-routes
 
-**Solution:** Try logging out and logging back in to refresh your authentication token.
+The existing project also validates uploaded photos for security/authenticity and includes GPS/EXIF-related checks as described in the original troubleshooting guidance.
 
-### Problem 7: Network Request Timeout
+## API Summary
 
-If uploads are timing out, the backend might be slow or unreachable.
+### Authentication
 
-**Solution:**
+- `POST /api/auth/register` — register a citizen and receive a JWT.
+- `POST /api/auth/login` — authenticate and receive a JWT.
+- `GET /api/auth/users` — list users; admin only.
 
-- Check backend console for errors
-- Restart the backend server
-- Check your WiFi signal strength
-- Try moving closer to your WiFi router
+### Civic issues
+
+- `POST /api/issues` — create an issue; authentication required.
+- `GET /api/issues` — list issues.
+- `GET /api/issues/:id` — retrieve one issue.
+- `PUT /api/issues/:id` — update an issue; staff/admin only.
+- `DELETE /api/issues/:id` — delete an issue; admin only.
+
+### Health
+
+- `GET /health` — basic backend health probe.
+
+## Project Structure
+
+```text
+CivicGuardAI/
+├── backend/
+│   ├── src/
+│   │   ├── config/
+│   │   ├── controllers/
+│   │   ├── middleware/
+│   │   ├── models/
+│   │   ├── routes/
+│   │   └── utils/
+│   └── server.js
+├── admin/
+│   └── src/
+└── mobile/
+    └── src/
+```
+
+## Security Notes
+
+- Passwords are bcrypt-hashed before persistence.
+- JWTs are signed server-side with `JWT_SECRET` and expire after 12 hours.
+- Protected endpoints require a Bearer token.
+- Role checks are performed on the backend, so client-side UI restrictions are not the security boundary.
+- Never expose `JWT_SECRET` or database credentials in client code or version control.
+- For production, serve the API over HTTPS so credentials and tokens are not transported over plaintext HTTP.
+- The current backend enables CORS with `origin: '*'`; production deployments should restrict allowed origins to trusted applications. citebackend-server
+
+## Current Authentication Limitations
+
+The current implementation is intentionally simple and suitable for a student/project environment, but it can be strengthened for production with:
+
+- refresh-token or short-lived access-token rotation
+- email verification
+- password reset flows
+- account lockout/rate limiting for repeated failed logins
+- stricter production CORS configuration
+- HTTPS-only deployment
+- secure platform storage for mobile tokens
+- audit logging for privileged admin/staff actions
+
+## Testing the Backend
+
+Health check:
+
+```bash
+curl http://localhost:5000/health
+```
+
+Expected response:
+
+```json
+{"status":"ok"}
+```
+
+Authenticated admin endpoint:
+
+```bash
+curl http://localhost:5000/api/auth/users \
+  -H "Authorization: Bearer <admin_token>"
+```
 
 ---
 
-## Testing Your Connection
+## Development Notes
 
-To verify everything is set up correctly:
-
-1. **Test backend health from your computer:**
-
-   ```sh
-   curl http://YOUR_IP_ADDRESS:5000/health
-   ```
-
-   Should return: `{"status":"ok"}`
-
-2. **Check the mobile app logs:**
-
-   - In Expo, check the console for connection errors
-   - Look for messages like: `[api] health ok` (good) or `[api] health check failed` (bad)
-
-3. **Try creating an issue:**
-   - Take a fresh photo with your camera
-   - Fill in title and description
-   - Submit and check backend console for error messages
+When switching Wi-Fi networks during local mobile development, the computer's local IP can change. Update the mobile API configuration accordingly before retesting connectivity.
