@@ -1,0 +1,17 @@
+{
+  "build": {
+    "development": {
+      "developmentClient": false,
+      "distribution": "internal",
+      "environment": "development"
+    },
+    "preview": {
+      "distribution": "internal",
+      "environment": "preview"
+    },
+    "production": {
+      "autoIncrement": true,
+      "environment": "production"
+    }
+  }
+}
