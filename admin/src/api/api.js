@@ -5,40 +5,34 @@ const API_BASE_URL =
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  // Do not set a global Content-Type header here. When sending
-  // FormData (file uploads) we must allow axios to set the
-  // multipart/form-data boundary automatically. Setting a
-  // global Content-Type to application/json prevents that and
-  // causes multer to not parse file uploads correctly.
 });
 
-// Request interceptor to add token
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("admin_token");
     if (token) {
+      config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Response interceptor to handle auth errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem("admin_token");
-      window.location.href = "/login";
+      localStorage.removeItem("admin_user");
+      if (window.location.pathname !== "/login") {
+        window.location.replace("/login");
+      }
     }
     return Promise.reject(error);
   }
 );
 
-// Admin authentication
 export const adminAuth = {
   login: async (email, password) => {
     const response = await api.post("/auth/login", { email, password });
@@ -46,7 +40,6 @@ export const adminAuth = {
   },
 };
 
-// Issues API
 export const issuesAPI = {
   getAll: async () => {
     const response = await api.get("/issues");
@@ -67,8 +60,6 @@ export const issuesAPI = {
   uploadImage: async (id, imageFile, extra = {}) => {
     const formData = new FormData();
     formData.append("image", imageFile);
-    // Append any extra fields (e.g., status) so backend can decide whether
-    // this is a resolved photo or an updated report photo.
     Object.entries(extra).forEach(([key, value]) => {
       if (value !== undefined && value !== null) {
         formData.append(key, String(value));
