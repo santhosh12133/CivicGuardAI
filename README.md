@@ -25,7 +25,7 @@ Citizen Mobile App / Admin Dashboard
           PostgreSQL / PostGIS
 ```
 
-The backend exposes the `/api/auth` and `/api/issues` route groups. Authentication uses JSON Web Tokens (JWT), while passwords are hashed with `bcryptjs` before storage. Role-based authorization is enforced by backend middleware rather than by the client applications. citebackend-controller
+The backend exposes the `/api/auth` and `/api/issues` route groups. Authentication uses JSON Web Tokens (JWT), while passwords are hashed with `bcryptjs` before storage. Role-based authorization is enforced by backend middleware rather than by the client applications.
 
 ## Authentication & Authorization
 
@@ -44,11 +44,11 @@ The authentication implementation is split across the following components:
 
 ### Credentials and password handling
 
-Passwords are **not stored as plaintext**. During registration, the backend hashes the supplied password with `bcrypt.hash(password, 10)` and stores the resulting hash. During login, the supplied password is checked with `bcrypt.compare(...)`. citebackend-controller
+Passwords are **not stored as plaintext**. During registration, the backend hashes the supplied password with `bcrypt.hash(password, 10)` and stores the resulting hash. During login, the supplied password is checked with `bcrypt.compare(...)`.
 
-Registration is intentionally limited to the `citizen` role. Although the request validator recognizes `citizen`, `staff`, and `admin`, the controller rejects non-citizen registrations on the public registration route. citebackend-auth-routes citebackend-controller
+Registration is intentionally limited to the `citizen` role. Although the request validator recognizes `citizen`, `staff`, and `admin`, the controller rejects non-citizen registrations on the public registration route.
 
-The backend also rejects duplicate email addresses and returns a generic `Invalid credentials` response when login fails, avoiding separate messages for an unknown user versus an incorrect password. citebackend-controller
+The backend also rejects duplicate email addresses and returns a generic `Invalid credentials` response when login fails, avoiding separate messages for an unknown user versus an incorrect password.
 
 ### JWT creation
 
@@ -61,7 +61,7 @@ After a successful registration or login, the backend creates a JWT containing:
 }
 ```
 
-The token is signed with the server-side `JWT_SECRET` environment variable and configured to expire after **12 hours**. The secret itself should never be committed to source control or exposed to clients. citebackend-controller
+The token is signed with the server-side `JWT_SECRET` environment variable and configured to expire after **12 hours**. The secret itself should never be committed to source control or exposed to clients.
 
 ### Request flow
 
@@ -96,7 +96,7 @@ The token is signed with the server-side `JWT_SECRET` environment variable and c
 10. Role middleware allows/denies the operation
 ```
 
-The mobile application restores the stored token on startup and re-applies it to the Axios client. Logout clears the local token and user state and removes the authorization header. citemobile-auth-context citemobile-api
+The mobile application restores the stored token on startup and re-applies it to the Axios client. Logout clears the local token and user state and removes the authorization header.
 
 ### Protected routes and roles
 
@@ -119,7 +119,7 @@ Protected requests must include:
 Authorization: Bearer <JWT_TOKEN>
 ```
 
-The middleware first checks that the header exists and starts with `Bearer `. It then verifies the token using `JWT_SECRET`. A missing token returns `401`, an invalid/expired token returns `401`, and an authenticated user without the required role returns `403`. citebackend-auth-middleware
+The middleware first checks that the header exists and starts with `Bearer `. It then verifies the token using `JWT_SECRET`. A missing token returns `401`, an invalid/expired token returns `401`, and an authenticated user without the required role returns `403`.
 
 ### Example authenticated request
 
@@ -128,7 +128,7 @@ curl http://localhost:5000/api/auth/users \
   -H "Authorization: Bearer <admin_token>"
 ```
 
-An admin token is required because `/api/auth/users` is protected by both `authenticateToken` and `authorizeRoles('admin')`. citebackend-auth-routes
+An admin token is required because `/api/auth/users` is protected by both `authenticateToken` and `authorizeRoles('admin')`.
 
 ## Environment & Secret Management
 
@@ -140,7 +140,7 @@ DATABASE_URL=postgres://<user>:<password>@<host>:<port>/<database>
 JWT_SECRET=<strong-random-secret>
 ```
 
-Keep production secrets outside the repository. Do not place real passwords, JWT secrets, database credentials, or other sensitive values in README files, source code, or client-side bundles. The repository's backend documentation already uses environment variables for the database connection and JWT secret. citebackend-readme
+Keep production secrets outside the repository. Do not place real passwords, JWT secrets, database credentials, or other sensitive values in README files, source code, or client-side bundles.
 
 ## Development Setup
 
@@ -161,7 +161,7 @@ npm install
 npm run dev
 ```
 
-The API runs on port `5000` by default. citebackend-readme
+The API runs on port `5000` by default.
 
 ### Mobile app with local backend
 
@@ -177,29 +177,29 @@ ipconfig
 3. Keep the mobile device and development computer on the same network.
 4. Restart the Expo development server after changing the API endpoint.
 
-The mobile API client centralizes the backend base URL and authentication header configuration. citemobile-api
+The mobile API client centralizes the backend base URL and authentication header configuration.
 
 ### Localtunnel option
 
-The backend README also documents using Localtunnel to expose the development API for mobile testing. The tunnel URL is temporary and should be treated as a development convenience, not as a production deployment architecture. citebackend-readme
+The backend README also documents using Localtunnel to expose the development API for mobile testing. The tunnel URL is temporary and should be treated as a development convenience, not as a production deployment architecture.
 
 ## Troubleshooting
 
 ### Authentication token problems
 
-If a protected request starts returning `401 Invalid or expired token`, log out and sign in again to obtain a fresh JWT. The server validates the token on every protected request and does not provide a refresh-token endpoint in the current implementation. citebackend-auth-middleware citebackend-controller
+If a protected request starts returning `401 Invalid or expired token`, log out and sign in again to obtain a fresh JWT. The server validates the token on every protected request and does not provide a refresh-token endpoint in the current implementation.
 
 ### Role/permission problems
 
-A valid token is not enough for staff/admin operations. The JWT role claim must match the role required by the route. For example, issue deletion requires `admin`, while issue updates require `staff` or `admin`. citebackend-issue-routes
+A valid token is not enough for staff/admin operations. The JWT role claim must match the role required by the route. For example, issue deletion requires `admin`, while issue updates require `staff` or `admin`.
 
 ### Network problems
 
-The mobile client contains diagnostics for backend connectivity, including timeout, network, and HTTP error handling. Check that the backend is running and that the mobile device is using a reachable API URL. citemobile-api
+The mobile client contains diagnostics for backend connectivity, including timeout, network, and HTTP error handling. Check that the backend is running and that the mobile device is using a reachable API URL.
 
 ## Issue Validation & Photo Requirements
 
-The backend validates civic issue fields such as title, description, latitude, longitude, and status. Issue creation is authenticated, while staff/admin permissions are required for updates and admin permission is required for deletion. citebackend-issue-routes
+The backend validates civic issue fields such as title, description, latitude, longitude, and status. Issue creation is authenticated, while staff/admin permissions are required for updates and admin permission is required for deletion.
 
 The existing project also validates uploaded photos for security/authenticity and includes GPS/EXIF-related checks as described in the original troubleshooting guidance.
 
@@ -250,7 +250,7 @@ CivicGuardAI/
 - Role checks are performed on the backend, so client-side UI restrictions are not the security boundary.
 - Never expose `JWT_SECRET` or database credentials in client code or version control.
 - For production, serve the API over HTTPS so credentials and tokens are not transported over plaintext HTTP.
-- The current backend enables CORS with `origin: '*'`; production deployments should restrict allowed origins to trusted applications. citebackend-server
+- The current backend enables CORS with `origin: '*'`; production deployments should restrict allowed origins to trusted applications.
 
 ## Current Authentication Limitations
 
