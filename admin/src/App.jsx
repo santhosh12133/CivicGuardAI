@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Box } from '@mui/material';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -8,11 +8,23 @@ import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
 
 const ProtectedLayout = ({ children }) => {
-  const navigate = useNavigate();
+  const location = useLocation();
   const token = localStorage.getItem('admin_token');
+  const storedUser = localStorage.getItem('admin_user');
 
-  if (!token) {
-    return <Navigate to="/login" replace />;
+  let user = null;
+  try {
+    user = storedUser ? JSON.parse(storedUser) : null;
+  } catch {
+    localStorage.removeItem('admin_user');
+  }
+
+  const hasStaffAccess = ['staff', 'admin'].includes(user?.role);
+
+  if (!token || !hasStaffAccess) {
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_user');
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
   return (
@@ -28,27 +40,15 @@ const ProtectedLayout = ({ children }) => {
   );
 };
 
-const ProtectedRoute = ({ element }) => {
-  return (
-    <ProtectedLayout>
-      {element}
-    </ProtectedLayout>
-  );
-};
+const ProtectedRoute = ({ element }) => <ProtectedLayout>{element}</ProtectedLayout>;
 
 function App() {
   return (
     <Router>
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route 
-          path="/" 
-          element={<ProtectedRoute element={<Dashboard />} />} 
-        />
-        <Route 
-          path="/issue/:id" 
-          element={<ProtectedRoute element={<IssueDetails />} />} 
-        />
+        <Route path="/" element={<ProtectedRoute element={<Dashboard />} />} />
+        <Route path="/issue/:id" element={<ProtectedRoute element={<IssueDetails />} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
