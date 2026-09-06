@@ -1,10 +1,15 @@
 const express = require('express');
 const { body } = require('express-validator');
 const { register, login, getUsers } = require('../controllers/authController');
-const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
+const {
+  authenticateToken,
+  authorizeRoles,
+} = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
+// Public registration intentionally creates citizen accounts only.
+// Staff/admin accounts must be provisioned through an administrative process.
 const registerValidation = [
   body('name').trim().notEmpty().withMessage('Name is required'),
   body('email').isEmail().withMessage('Valid email is required'),
@@ -13,8 +18,8 @@ const registerValidation = [
     .withMessage('Password must be at least 8 characters long'),
   body('role')
     .optional()
-    .isIn(['citizen', 'staff', 'admin'])
-    .withMessage('Role must be citizen, staff, or admin'),
+    .equals('citizen')
+    .withMessage('Public registration is limited to the citizen role'),
 ];
 
 const loginValidation = [
@@ -27,4 +32,3 @@ router.post('/login', loginValidation, login);
 router.get('/users', authenticateToken, authorizeRoles('admin'), getUsers);
 
 module.exports = router;
-
