@@ -65,6 +65,11 @@ Evidence tests stamp the fixture images in `test/fixtures/` with EXIF dates and 
 
 Failures upload screenshots, traces, device logs and the API log as workflow artifacts.
 
+### Bugs found by the end-to-end tests
+
+- **Android photo uploads always failed** with "Cannot connect to server". axios labelled the report's `FormData` as `application/x-www-form-urlencoded`, and React Native's Android networking refused to encode it (`multipart != application/x-www-form-urlencoded`). Fixed in `mobile/src/utils/api.js`; the emulator flow `03-report-issue` now submits a real gallery photo through the evidence checks.
+- **The rate limit (120 requests/minute per IP) was too low** for several staff sharing an office connection; it is now 300 and configurable (`RATE_LIMIT_MAX`).
+
 ### Evidence gaps closed by this suite
 
 These were found by the first version of the suite and are now enforced by regular tests:
