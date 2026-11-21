@@ -52,6 +52,12 @@ for flow in "$FLOWS"/0*.yaml; do
       | grep -v '^$' | head -60 || true
     echo "App log:"
     adb logcat -d -s ReactNativeJS:V AndroidRuntime:E 2>/dev/null | tail -30 || true
+    echo "Native errors:"
+    adb logcat -d 2>/dev/null | grep -iE "exception|okhttp|networking" | grep -v "^--" | tail -30 || true
+    if [ -n "${API_LOG:-}" ] && [ -f "$API_LOG" ]; then
+      echo "API server log (last lines):"
+      tail -40 "$API_LOG"
+    fi
   fi
   adb logcat -d > "$OUT/logcat-$name.txt" 2>/dev/null || true
   echo "::endgroup::"

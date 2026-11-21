@@ -168,7 +168,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
-          script: bash .github/scripts/mobile-e2e.sh ${{ runner.temp }}/civicfix-e2e.apk ${{ runner.temp }}/gallery.jpg ${{ runner.temp }}/seed.json mobile-e2e-results
+          script: API_LOG=${{ runner.temp }}/api.log bash .github/scripts/mobile-e2e.sh ${{ runner.temp }}/civicfix-e2e.apk ${{ runner.temp }}/gallery.jpg ${{ runner.temp }}/seed.json mobile-e2e-results
 
       - uses: actions/upload-artifact@v4
         if: always()

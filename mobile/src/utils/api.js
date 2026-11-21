@@ -114,6 +114,16 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (!error.response) {
+      // React Native keeps the underlying native error (e.g. an OkHttp
+      // exception) on the XMLHttpRequest; log it so device logs explain
+      // "Network Error"s.
+      console.warn("[api] request failed without a response", {
+        method: error.config?.method,
+        url: error.config?.url,
+        code: error.code,
+        message: error.message,
+        native: error.request?._response,
+      });
       if (error.code === "ECONNABORTED") {
         return Promise.reject(
           new Error(
