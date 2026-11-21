@@ -25,6 +25,15 @@ on:
         description: "Publish as a GitHub Release (gives citizens a download link)"
         type: boolean
         default: true
+  # Called by deploy-aws.yml after a deploy, with the new API address.
+  workflow_call:
+    inputs:
+      api_url:
+        type: string
+        required: true
+      publish:
+        type: boolean
+        default: false
   pull_request:
     paths:
       - "mobile/**"
@@ -35,7 +44,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: android-apk-${{ github.ref }}
+  group: android-apk-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
@@ -189,7 +198,7 @@ jobs:
 
   publish:
     needs: [build, launch-test]
-    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    if: inputs.publish
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

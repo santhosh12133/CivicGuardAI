@@ -1,0 +1,276 @@
+name: Deploy to AWS
+
+# Deploys the CivicFix API, database and admin portal to AWS, then (when run
+# by hand) builds the Android app against the deployed API.
+#
+# One-time setup (see DEPLOYMENT.md, "Deploy on AWS"):
+#   1. Create the CloudFormation stack from infra/aws/bootstrap.yml.
+#   2. Add its DeployRoleArn output as the repository variable AWS_DEPLOY_ROLE_ARN.
+# Optional repository variables: AWS_REGION (default ap-south-1),
+#   DB_INSTANCE_CLASS (default db.t4g.micro), DB_BACKUP_DAYS (default 7).
+#
+# Uses GitHub's OIDC login: no AWS access keys are stored anywhere.
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_apk:
+        description: "Also build and publish the Android app for the deployed API"
+        type: boolean
+        default: true
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "admin/**"
+      - "infra/aws/**"
+      - ".github/workflows/deploy-aws.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-aws
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'ap-south-1' }}
+  BASE_STACK: civicfix-base
+  API_STACK: civicfix-api
+
+jobs:
+  check-setup:
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      - id: check
+        env:
+          ROLE: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          if [ -z "$ROLE" ]; then
+            echo "::notice::AWS deploy is not set up yet (no AWS_DEPLOY_ROLE_ARN variable). See DEPLOYMENT.md."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  test:
+    needs: check-setup
+    if: needs.check-setup.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: civicguard_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/civicguard_test
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "18.x"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Backend tests
+        working-directory: backend
+        run: |
+          npm ci
+          npm test
+
+  deploy:
+    needs: [check-setup, test]
+    if: needs.check-setup.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      api_url: ${{ steps.urls.outputs.api_url }}
+      admin_url: ${{ steps.urls.outputs.admin_url }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: civicfix-deploy-${{ github.run_id }}
+          role-duration-seconds: 7200
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Helper functions
+        run: |
+          cat > "$RUNNER_TEMP/cfn.sh" <<'EOF'
+          # Print the reasons a stack operation failed.
+          show_failures() {
+            aws cloudformation describe-stack-events --stack-name "$1" \
+              --query "StackEvents[?contains(ResourceStatus, 'FAILED')].[LogicalResourceId, ResourceStatusReason]" \
+              --output text | head -20 | sed 's/^/::error::/'
+          }
+          # A stack whose first creation failed must be deleted before retrying.
+          clear_failed_create() {
+            status=$(aws cloudformation describe-stacks --stack-name "$1" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo NONE)
+            if [ "$status" = "ROLLBACK_COMPLETE" ]; then
+              echo "Removing $1 left over from a failed first deploy"
+              aws cloudformation delete-stack --stack-name "$1"
+              aws cloudformation wait stack-delete-complete --stack-name "$1"
+            fi
+          }
+          output() {
+            aws cloudformation describe-stacks --stack-name "$1" \
+              --query "Stacks[0].Outputs[?OutputKey=='$2'].OutputValue" --output text
+          }
+          EOF
+
+      - name: Find the default VPC
+        run: |
+          vpc=$(aws ec2 describe-vpcs --filters Name=is-default,Values=true --query 'Vpcs[0].VpcId' --output text)
+          if [ -z "$vpc" ] || [ "$vpc" = "None" ]; then
+            echo "::error::No default VPC in $AWS_REGION. Create one (VPC console -> Actions -> Create default VPC) and re-run."
+            exit 1
+          fi
+          cidr=$(aws ec2 describe-vpcs --vpc-ids "$vpc" --query 'Vpcs[0].CidrBlock' --output text)
+          subnets=$(aws ec2 describe-subnets --filters Name=vpc-id,Values="$vpc" Name=default-for-az,Values=true \
+            --query 'Subnets[].SubnetId' --output text | tr '\t' ',')
+          echo "VPC_ID=$vpc" >> "$GITHUB_ENV"
+          echo "VPC_CIDR=$cidr" >> "$GITHUB_ENV"
+          echo "SUBNET_IDS=$subnets" >> "$GITHUB_ENV"
+          echo "Default VPC $vpc ($cidr), subnets $subnets"
+
+      - name: Deploy database, registry, secrets and admin hosting
+        run: |
+          source "$RUNNER_TEMP/cfn.sh"
+          clear_failed_create "$BASE_STACK"
+          aws cloudformation deploy \
+            --stack-name "$BASE_STACK" \
+            --template-file infra/aws/base.yml \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset \
+            --tags app=civicfix \
+            --parameter-overrides \
+              VpcId="$VPC_ID" VpcCidr="$VPC_CIDR" SubnetIds="$SUBNET_IDS" \
+              DbInstanceClass="${{ vars.DB_INSTANCE_CLASS || 'db.t4g.micro' }}" \
+              DbBackupRetentionDays="${{ vars.DB_BACKUP_DAYS || '7' }}" \
+            || { show_failures "$BASE_STACK"; exit 1; }
+
+          for key in ImageRepositoryUri ClusterName ExecutionRoleArn InfrastructureRoleArn ApiLogGroupName \
+                     JwtSecretArn DbSecretArn DbHost DbPort AdminBucketName AdminDistributionId AdminUrl; do
+            echo "$key=$(output "$BASE_STACK" "$key")" >> "$GITHUB_ENV"
+          done
+
+      - name: Build and push the API image
+        run: |
+          tag="${GITHUB_SHA::12}"
+          registry="${ImageRepositoryUri%%/*}"
+          aws ecr get-login-password | docker login --username AWS --password-stdin "$registry"
+          if aws ecr describe-images --repository-name civicfix-api --image-ids imageTag="$tag" >/dev/null 2>&1; then
+            echo "Image $tag already pushed"
+          else
+            docker build --pull -t "$ImageRepositoryUri:$tag" backend
+            docker push "$ImageRepositoryUri:$tag"
+          fi
+          echo "IMAGE_URI=$ImageRepositoryUri:$tag" >> "$GITHUB_ENV"
+
+      - name: Deploy the API service
+        run: |
+          source "$RUNNER_TEMP/cfn.sh"
+          clear_failed_create "$API_STACK"
+          aws cloudformation deploy \
+            --stack-name "$API_STACK" \
+            --template-file infra/aws/api.yml \
+            --no-fail-on-empty-changeset \
+            --tags app=civicfix \
+            --parameter-overrides \
+              ImageUri="$IMAGE_URI" ClusterName="$ClusterName" \
+              ExecutionRoleArn="$ExecutionRoleArn" InfrastructureRoleArn="$InfrastructureRoleArn" \
+              ApiLogGroupName="$ApiLogGroupName" JwtSecretArn="$JwtSecretArn" DbSecretArn="$DbSecretArn" \
+              DbHost="$DbHost" DbPort="$DbPort" CorsOrigins="$AdminUrl" \
+            || { show_failures "$API_STACK"; echo "::error::Container logs: CloudWatch log group $ApiLogGroupName"; exit 1; }
+
+      - name: Work out the public URLs
+        id: urls
+        run: |
+          source "$RUNNER_TEMP/cfn.sh"
+          endpoint=$(output "$API_STACK" ApiEndpoint)
+          endpoint="${endpoint%/}"
+          case "$endpoint" in https://*) ;; http://*) endpoint="https://${endpoint#http://}" ;; *) endpoint="https://$endpoint" ;; esac
+          echo "API_URL=$endpoint" >> "$GITHUB_ENV"
+          echo "api_url=$endpoint" >> "$GITHUB_OUTPUT"
+          echo "admin_url=$AdminUrl" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for the API to be healthy
+        run: |
+          for i in $(seq 1 60); do
+            body=$(curl -fsS --max-time 10 "$API_URL/health" 2>/dev/null) && echo "$body" | grep -q '"database":"ok"' && {
+              echo "Healthy: $body"; exit 0; }
+            echo "Waiting for $API_URL/health ($i/60)..."
+            sleep 10
+          done
+          echo "::error::The API did not become healthy. Check CloudWatch log group $ApiLogGroupName."
+          exit 1
+
+      - name: Smoke-test the API
+        run: |
+          # Bad credentials must be a clean 401 from the app, not a proxy error.
+          code=$(curl -s -o /tmp/login.json -w '%{http_code}' -H 'Content-Type: application/json' \
+            -d '{"email":"nobody@example.com","password":"wrong-password"}' "$API_URL/api/auth/login")
+          [ "$code" = "401" ] || { echo "::error::Expected 401 from login, got $code: $(cat /tmp/login.json)"; exit 1; }
+          # The admin portal's origin must be allowed by CORS.
+          curl -s -D - -o /dev/null -H "Origin: $AdminUrl" "$API_URL/" | grep -qi "access-control-allow-origin: $AdminUrl" \
+            || { echo "::error::CORS does not allow $AdminUrl"; exit 1; }
+          echo "API responds correctly."
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20.x"
+          cache: npm
+          cache-dependency-path: admin/package-lock.json
+
+      - name: Build and publish the admin portal
+        working-directory: admin
+        env:
+          VITE_API_URL: ${{ env.API_URL }}/api
+        run: |
+          npm ci
+          npm run build
+          # Hashed assets can be cached forever; index.html must always be fresh.
+          aws s3 sync dist "s3://$AdminBucketName" --delete --exclude index.html \
+            --cache-control "public,max-age=31536000,immutable"
+          aws s3 cp dist/index.html "s3://$AdminBucketName/index.html" --cache-control "no-cache"
+          aws cloudfront create-invalidation --distribution-id "$AdminDistributionId" --paths "/*" >/dev/null
+
+      - name: Summary
+        run: |
+          {
+            echo "## CivicFix deployed to AWS ($AWS_REGION)"
+            echo "| | |"
+            echo "|---|---|"
+            echo "| API | $API_URL |"
+            echo "| Admin portal | $AdminUrl |"
+            echo "| Image | \`$IMAGE_URI\` |"
+            echo "| Logs | CloudWatch \`$ApiLogGroupName\` |"
+            echo
+            echo "First deploy? Create your admin account (DEPLOYMENT.md, \"Create your admin account on AWS\")."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  android:
+    needs: deploy
+    if: github.event_name == 'workflow_dispatch' && inputs.build_apk
+    permissions:
+      contents: write
+    uses: ./.github/workflows/android-apk.yml
+    with:
+      api_url: ${{ needs.deploy.outputs.api_url }}
+      publish: true
+    secrets: inherit

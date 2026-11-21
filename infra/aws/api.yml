@@ -1,0 +1,106 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  CivicFix API on Amazon ECS Express Mode (Fargate behind an HTTPS load
+  balancer with an AWS-provided address). Deployed by
+  .github/workflows/deploy-aws.yml after base.yml; every deploy passes a new
+  image.
+
+Parameters:
+  ImageUri:
+    Type: String
+    Description: Container image to run (ECR URI with tag).
+  ClusterName:
+    Type: String
+  ExecutionRoleArn:
+    Type: String
+  InfrastructureRoleArn:
+    Type: String
+  ApiLogGroupName:
+    Type: String
+  JwtSecretArn:
+    Type: String
+  DbSecretArn:
+    Type: String
+  DbHost:
+    Type: String
+  DbPort:
+    Type: String
+    Default: "5432"
+  CorsOrigins:
+    Type: String
+    Description: Admin portal origin(s), comma-separated.
+  Cpu:
+    Type: String
+    Default: "512"
+    AllowedValues: ["256", "512", "1024", "2048"]
+    Description: CPU units per task (1024 = 1 vCPU).
+  Memory:
+    Type: String
+    Default: "1024"
+    Description: Memory per task in MiB (must be valid for the chosen CPU).
+  MinTasks:
+    Type: Number
+    Default: 1
+  MaxTasks:
+    Type: Number
+    Default: 2
+
+Resources:
+  ApiService:
+    Type: AWS::ECS::ExpressGatewayService
+    Properties:
+      ServiceName: civicfix-api
+      Cluster: !Ref ClusterName
+      ExecutionRoleArn: !Ref ExecutionRoleArn
+      InfrastructureRoleArn: !Ref InfrastructureRoleArn
+      Cpu: !Ref Cpu
+      Memory: !Ref Memory
+      HealthCheckPath: /health
+      PrimaryContainer:
+        Image: !Ref ImageUri
+        ContainerPort: 5000
+        AwsLogsConfiguration:
+          LogGroup: !Ref ApiLogGroupName
+          LogStreamPrefix: api
+        Environment:
+          - Name: NODE_ENV
+            Value: production
+          - Name: PORT
+            Value: "5000"
+          - Name: API_PROTOCOL
+            Value: https
+          - Name: CORS_ORIGINS
+            Value: !Ref CorsOrigins
+          # Creates any missing tables at start-up (no migration runner yet).
+          - Name: DB_SYNC
+            Value: "true"
+          - Name: DB_HOST
+            Value: !Ref DbHost
+          - Name: DB_PORT
+            Value: !Ref DbPort
+          - Name: DB_NAME
+            Value: civicfix
+          # RDS requires TLS; verify it against Amazon's CA bundle baked into the image.
+          - Name: DATABASE_SSL
+            Value: "true"
+          - Name: DATABASE_SSL_CA
+            Value: /app/certs/rds-global-bundle.pem
+        Secrets:
+          - Name: JWT_SECRET
+            ValueFrom: !Ref JwtSecretArn
+          - Name: DB_USER
+            ValueFrom: !Sub "${DbSecretArn}:username::"
+          - Name: DB_PASSWORD
+            ValueFrom: !Sub "${DbSecretArn}:password::"
+      ScalingTarget:
+        MinTaskCount: !Ref MinTasks
+        MaxTaskCount: !Ref MaxTasks
+        AutoScalingMetric: AVERAGE_CPU
+        AutoScalingTargetValue: 60
+
+Outputs:
+  ApiEndpoint:
+    Description: Public HTTPS address of the API.
+    Value: !GetAtt ApiService.Endpoint
+  ServiceArn:
+    Value: !GetAtt ApiService.ServiceArn

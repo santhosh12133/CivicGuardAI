@@ -76,3 +76,32 @@ jobs:
       - name: Validate Expo configuration
         working-directory: mobile
         run: npx expo config --type public
+
+  infra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Lint CloudFormation templates
+        run: |
+          pip install --quiet cfn-lint
+          cfn-lint --version
+          cfn-lint infra/aws/*.yml
+      - name: Lint GitHub Actions workflows
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -color
+      - name: Build the API container image
+        run: docker build --pull -t civicfix-api:ci backend
+      - name: Check the image starts and has the RDS CA bundle
+        run: |
+          docker run --rm -e DATABASE_URL=postgres://x:y@127.0.0.1:1/z -e JWT_SECRET=0123456789abcdef0123456789abcdef \
+            civicfix-api:ci node -e "
+              const ca = require('fs').readFileSync('/app/certs/rds-global-bundle.pem', 'utf8');
+              if (!ca.includes('BEGIN CERTIFICATE')) throw new Error('CA bundle missing');
+              require('/app/src/app.js').createApp();
+              console.log('image ok');
+              process.exit(0);
+            "

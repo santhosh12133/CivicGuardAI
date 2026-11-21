@@ -8,7 +8,9 @@ This file is the operational contract for configuration. Real secrets must never
 |---|---|---|---|---|
 | `NODE_ENV` | Production: yes | `production` | No | Selects production behavior |
 | `PORT` | No | `5000` | No | HTTP listener port |
-| `DATABASE_URL` | Yes | `postgres://...` | Yes | PostgreSQL connection string |
+| `DATABASE_URL` | One of these | `postgres://...` | Yes | PostgreSQL connection string (Render, Neon, local) |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | …or these | `civicfix-db.xxxx.rds.amazonaws.com` | `DB_PASSWORD`: Yes | Connection settings as separate values (used on AWS, where the password comes from Secrets Manager). Ignored when `DATABASE_URL` is set |
+| `DATABASE_SSL_CA` | No | `/app/certs/rds-global-bundle.pem` | No | PEM file of certificate authorities used to verify the database's TLS certificate. The Docker image ships Amazon RDS's bundle at that path |
 | `DATABASE_SSL` | External DBs | `true` | No | Use TLS for the database connection. Needed for Render's *external* URL, Neon, Supabase, etc. Also enabled by `sslmode=require` in the URL |
 | `DATABASE_SSL_REJECT_UNAUTHORIZED` | No | `false` | No | Set to `false` only if the provider's certificate is not trusted by Node |
 | `JWT_SECRET` | Yes | random 64+ char value | Yes | JWT signing/verification secret |

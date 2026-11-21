@@ -1,0 +1,281 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  CivicFix shared infrastructure: container registry, PostgreSQL (RDS),
+  secrets, IAM roles for the API service, and S3 + CloudFront hosting for the
+  admin portal. Deployed by .github/workflows/deploy-aws.yml.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC for the database and API (the deploy workflow uses the default VPC).
+  VpcCidr:
+    Type: String
+    Description: CIDR of that VPC; the database accepts connections only from inside it.
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: At least two subnets in different Availability Zones.
+  DbInstanceClass:
+    Type: String
+    Default: db.t4g.micro
+    Description: RDS instance size (db.t4g.micro is eligible for the AWS Free Tier).
+  DbAllocatedStorage:
+    Type: Number
+    Default: 20
+    MinValue: 20
+    Description: Initial database storage in GB. Photos are stored in the database.
+  DbMaxAllocatedStorage:
+    Type: Number
+    Default: 100
+    Description: Storage autoscaling ceiling in GB.
+  DbBackupRetentionDays:
+    Type: Number
+    Default: 7
+    MinValue: 1
+    MaxValue: 35
+    Description: Days of automatic backups. Some free-plan accounts only allow 1.
+
+Resources:
+  # ---------- Container registry ----------
+  ImageRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: civicfix-api
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [{
+              "rulePriority": 1,
+              "description": "Keep the 20 most recent images",
+              "selection": { "tagStatus": "any", "countType": "imageCountMoreThan", "countNumber": 20 },
+              "action": { "type": "expire" }
+            }]
+          }
+
+  # ---------- Secrets ----------
+  JwtSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: civicfix/jwt-secret
+      Description: Signing key for CivicFix login tokens.
+      GenerateSecretString:
+        PasswordLength: 64
+        ExcludePunctuation: true
+
+  DbSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: civicfix/database
+      Description: CivicFix database master credentials (not rotated automatically; the API reads them at start-up).
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "civicfix"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludePunctuation: true
+
+  # ---------- Database ----------
+  DbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: CivicFix PostgreSQL - reachable only from inside the VPC
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: !Ref VpcCidr
+          Description: CivicFix API tasks
+
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: CivicFix database subnets
+      SubnetIds: !Ref SubnetIds
+
+  Database:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: civicfix-db
+      Engine: postgres
+      EngineVersion: "16"
+      DBInstanceClass: !Ref DbInstanceClass
+      DBName: civicfix
+      MasterUsername: !Sub "{{resolve:secretsmanager:${DbSecret}:SecretString:username}}"
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DbSecret}:SecretString:password}}"
+      AllocatedStorage: !Ref DbAllocatedStorage
+      MaxAllocatedStorage: !Ref DbMaxAllocatedStorage
+      StorageType: gp3
+      StorageEncrypted: true
+      PubliclyAccessible: false
+      MultiAZ: false
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      VPCSecurityGroups:
+        - !GetAtt DbSecurityGroup.GroupId
+      BackupRetentionPeriod: !Ref DbBackupRetentionDays
+      CopyTagsToSnapshot: true
+      DeletionProtection: true
+      AutoMinorVersionUpgrade: true
+
+  # ---------- API service roles and logs ----------
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: civicfix
+
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /civicfix/api
+      RetentionInDays: 30
+
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: civicfix-ecs-execution
+      Description: Lets ECS pull the CivicFix image, write logs, and read its secrets.
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: read-civicfix-secrets
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref JwtSecret
+                  - !Ref DbSecret
+
+  InfrastructureRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: civicfix-ecs-infrastructure
+      Description: Lets ECS Express Mode create the load balancer, certificate and scaling for the API.
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonECSInfrastructureRoleforExpressGatewayServices
+
+  # ---------- Admin portal (static site) ----------
+  AdminBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub civicfix-admin-${AWS::AccountId}-${AWS::Region}
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  AdminOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub civicfix-admin-${AWS::Region}
+        Description: CloudFront access to the CivicFix admin bucket
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  AdminDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: CivicFix admin portal
+        Enabled: true
+        DefaultRootObject: index.html
+        HttpVersion: http2and3
+        PriceClass: PriceClass_200
+        Origins:
+          - Id: admin-bucket
+            DomainName: !GetAtt AdminBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt AdminOriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+        DefaultCacheBehavior:
+          TargetOriginId: admin-bucket
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+          # Managed policy "CachingOptimized"
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+        # Single-page app: unknown paths (e.g. /issue/123 on refresh) serve index.html.
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+
+  AdminBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AdminBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub ${AdminBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${AdminDistribution}
+
+Outputs:
+  VpcId:
+    Value: !Ref VpcId
+  SubnetIds:
+    Value: !Join [",", !Ref SubnetIds]
+  ImageRepositoryUri:
+    Value: !GetAtt ImageRepository.RepositoryUri
+  ClusterName:
+    Value: !Ref Cluster
+  ExecutionRoleArn:
+    Value: !GetAtt ExecutionRole.Arn
+  InfrastructureRoleArn:
+    Value: !GetAtt InfrastructureRole.Arn
+  ApiLogGroupName:
+    Value: !Ref ApiLogGroup
+  JwtSecretArn:
+    Value: !Ref JwtSecret
+  DbSecretArn:
+    Value: !Ref DbSecret
+  DbHost:
+    Value: !GetAtt Database.Endpoint.Address
+  DbPort:
+    Value: !GetAtt Database.Endpoint.Port
+  AdminBucketName:
+    Value: !Ref AdminBucket
+  AdminDistributionId:
+    Value: !Ref AdminDistribution
+  AdminUrl:
+    Description: Admin portal address.
+    Value: !Sub https://${AdminDistribution.DomainName}

@@ -57,3 +57,26 @@ test('JSON bodies over 1 MB are rejected with 413', async () => {
   });
   assert.equal(res.status, 413);
 });
+
+test('the API can connect using DB_HOST/DB_NAME/DB_USER/DB_PASSWORD (as on AWS)', () => {
+  const { spawnSync } = require('child_process');
+  const path = require('path');
+  const url = new URL(process.env.TEST_DATABASE_URL);
+  const result = spawnSync(
+    process.execPath,
+    ['-e', "require('./src/config/db').sequelize.authenticate().then(() => process.exit(0), (e) => { console.error(e.message); process.exit(1); })"],
+    {
+      cwd: path.join(__dirname, '..', '..'),
+      env: {
+        PATH: process.env.PATH,
+        DB_HOST: url.hostname,
+        DB_PORT: url.port || '5432',
+        DB_NAME: url.pathname.slice(1),
+        DB_USER: decodeURIComponent(url.username),
+        DB_PASSWORD: decodeURIComponent(url.password),
+      },
+      encoding: 'utf8',
+    }
+  );
+  assert.equal(result.status, 0, result.stderr);
+});
