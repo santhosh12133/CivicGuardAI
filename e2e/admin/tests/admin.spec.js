@@ -10,11 +10,16 @@ const RESOLUTION_PHOTO = path.join(__dirname, '..', '..', '..', 'backend', 'test
 
 test.describe.configure({ mode: 'serial' });
 
-const login = async (page, email, password) => {
+// Signs in and, unless a refusal is expected, waits until the session is
+// stored and the Overview page is shown.
+const login = async (page, email, password, { expectSuccess = true } = {}) => {
   await page.goto('/login');
   await page.getByLabel(/Email Address/).fill(email);
   await page.getByLabel(/^Password/).fill(password);
   await page.getByRole('button', { name: 'Sign In' }).click();
+  if (expectSuccess) {
+    await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
+  }
 };
 
 const logout = async (page) => {
@@ -34,13 +39,13 @@ let staffEmail;
 let staffPassword;
 
 test('citizens cannot sign in to the admin portal', async ({ page }) => {
-  await login(page, seed.asha.email, seed.asha.password);
+  await login(page, seed.asha.email, seed.asha.password, { expectSuccess: false });
   await expect(page.getByText('restricted to staff and admin')).toBeVisible();
   await expect(page).toHaveURL(/\/login$/);
 });
 
 test('wrong password shows an error', async ({ page }) => {
-  await login(page, seed.admin.email, 'definitely-wrong');
+  await login(page, seed.admin.email, 'definitely-wrong', { expectSuccess: false });
   await expect(page.getByText('Invalid credentials')).toBeVisible();
 });
 
@@ -233,7 +238,7 @@ test('admin resets a password and removes staff access', async ({ page }) => {
   await logout(page);
 
   // No longer allowed into the portal.
-  await login(page, staffEmail, newPassword);
+  await login(page, staffEmail, newPassword, { expectSuccess: false });
   await expect(page.getByText('restricted to staff and admin')).toBeVisible();
 });
 

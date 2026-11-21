@@ -38,9 +38,18 @@ name: A citizen reports a new issue with a gallery photo
     direction: UP
 - tapOn:
     id: "category-streetlight"
+- scrollUntilVisible:
+    element:
+      id: "report-title"
+    direction: DOWN
 - tapOn:
     id: "report-title"
 - inputText: "Flickering streetlight at park gate"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: "report-description"
+    direction: DOWN
 - tapOn:
     id: "report-description"
 - inputText: "Light flickers all night near the north gate."
