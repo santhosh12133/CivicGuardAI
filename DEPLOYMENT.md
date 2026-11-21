@@ -187,13 +187,15 @@ Optional: `GOOGLE_MAPS_API_KEY` (an Android Maps SDK key from Google Cloud) show
 ### Build and publish
 
 1. GitHub → **Actions → Android APK → Run workflow**.
-2. **api_url:** your API URL **without** `/api`, e.g. `https://civicfix-api.onrender.com`.
+2. **api_url:** your API URL **without** `/api`, e.g. `https://civicfix-api.onrender.com`. If you leave it empty, the app asks for the server address on first launch (people can also change it from the login screen).
 3. Keep **publish** ticked and run. It takes about 25–35 minutes.
 4. When it finishes, open **Releases**: the newest `CivicFix-v…-build….apk` is the file to share. Send citizens the release link, or the direct link to the `.apk`.
 
 Citizens install it by opening the downloaded file and allowing installs from their browser/file manager when Android asks. Each new build installs over the previous one.
 
-Rebuild (step 5) whenever the API URL changes. Changes to the API or admin portal alone do not need a new APK.
+Pushing a git tag named `mobile-v…` (e.g. `mobile-v1.0.1`) also builds and publishes, without a built-in server address. Without the signing secrets, any published build is marked as a **test pre-release** signed with a public debug key; uninstall it before installing an official build.
+
+Rebuild (step 5) whenever the API URL changes, if you built it in. Changes to the API or admin portal alone do not need a new APK.
 
 ## Step 6: Check everything end to end
 

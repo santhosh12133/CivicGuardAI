@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { Text, Button, Chip, Card } from "react-native-paper";
 import { useRoute } from "@react-navigation/native";
-import api, { API_BASE_URL } from "../utils/api";
+import api, { getApiBaseUrl } from "../utils/api";
 
 const STATUS_COLORS = {
   Open: "#f97316",
@@ -33,7 +33,7 @@ const IssueDetailScreen = ({ navigation }) => {
       // Replace localhost or 127.0.0.1 (backend may have used localhost when
       // generating upload URLs) with the mobile API base host so images are
       // reachable from the device/emulator.
-      const apiBase = API_BASE_URL.replace(/\/$/, "");
+      const apiBase = getApiBaseUrl().replace(/\/$/, "");
       // If the URL points to the uploads path on any host, rewrite it to use
       // the configured API base. This covers cases where the backend built
       // the URL with localhost, a hostname, or a different LAN IP.

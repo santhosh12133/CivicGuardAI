@@ -1,5 +1,5 @@
 import React from "react";
-import { API_BASE_URL } from "../utils/api";
+import { getApiBaseUrl } from "../utils/api";
 import { StyleSheet } from "react-native";
 import { Card, Text, Chip } from "react-native-paper";
 
@@ -14,7 +14,7 @@ const IssueCard = ({ issue, onPress }) => {
   const normalizeUrl = (url) => {
     if (!url) return url;
     try {
-      const apiBase = API_BASE_URL.replace(/\/$/, "");
+      const apiBase = getApiBaseUrl().replace(/\/$/, "");
       const uploadsIndex = url.indexOf("/uploads/");
       if (uploadsIndex !== -1) {
         const path = url.substring(uploadsIndex);

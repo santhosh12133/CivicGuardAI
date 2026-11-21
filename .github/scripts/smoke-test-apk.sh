@@ -22,7 +22,8 @@ for _ in $(seq 1 30); do
     break
   fi
   adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || continue
-  if adb shell cat /sdcard/ui.xml | grep -q "Create an account"; then
+  # Login screen (server built in) or the server screen (asked on first launch).
+  if adb shell cat /sdcard/ui.xml | grep -Eq "Create an account|Connect to your CivicFix server"; then
     found="yes"
     break
   fi
@@ -39,9 +40,9 @@ if grep -E "FATAL EXCEPTION|ReactNativeJS.*(Error|Exception)" "$OUT/logcat.txt" 
 fi
 
 if [ -z "$found" ]; then
-  echo "::error::The login screen did not appear within 90 seconds"
+  echo "::error::Neither the login nor the server screen appeared within 90 seconds"
   grep -E "ReactNativeJS|AndroidRuntime" "$OUT/logcat.txt" | tail -40 || true
   exit 1
 fi
 
-echo "App launched and showed the login screen."
+echo "App launched and showed its first screen."

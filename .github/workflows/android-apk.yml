@@ -5,7 +5,10 @@ name: Android APK
 # as a GitHub Release so citizens can download it from a link.
 #
 # Run it from: GitHub -> Actions -> "Android APK" -> Run workflow.
-# The API URL is baked into the app, so build again whenever it changes.
+# A build can have the server address built in (citizens just install and
+# sign in) or leave it out, in which case the app asks for it on first launch.
+#
+# Pushing a tag named mobile-v* (e.g. mobile-v1.0.0) also builds and publishes.
 #
 # Repository secrets used (Settings -> Secrets and variables -> Actions):
 #   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
@@ -18,8 +21,8 @@ on:
   workflow_dispatch:
     inputs:
       api_url:
-        description: "Backend URL the app connects to, without /api (e.g. https://civicfix-api.onrender.com)"
-        required: true
+        description: "Server address to build in, without /api (e.g. https://civicfix-api.example.com). Leave empty to have the app ask for it."
+        required: false
         type: string
       publish:
         description: "Publish as a GitHub Release (gives citizens a download link)"
@@ -30,10 +33,14 @@ on:
     inputs:
       api_url:
         type: string
-        required: true
+        required: false
+        default: ""
       publish:
         type: boolean
         default: false
+  push:
+    tags:
+      - "mobile-v*"
   pull_request:
     paths:
       - "mobile/**"
@@ -64,9 +71,14 @@ jobs:
       - name: Check API URL
         id: api
         env:
-          RAW_URL: ${{ inputs.api_url || vars.MOBILE_API_URL || 'https://civicfix-api.onrender.com' }}
+          RAW_URL: ${{ inputs.api_url || vars.MOBILE_API_URL || '' }}
         run: |
           url="${RAW_URL%/}"
+          if [ -z "$url" ]; then
+            echo "No server address given: the app will ask for it on first launch."
+            echo "url=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           case "$url" in
             https://*) ;;
             *) echo "::error::The API URL must start with https:// (got '$url')"; exit 1 ;;
@@ -140,8 +152,8 @@ jobs:
           apksigner=$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -1)
           "$apksigner" verify --print-certs "dist/$name" | tee dist/signature.txt
 
-          # The API URL must be compiled into the JavaScript bundle.
-          if ! unzip -p "dist/$name" assets/index.android.bundle | grep -a -q "$EXPO_PUBLIC_API_URL"; then
+          # A built-in server address must be compiled into the JavaScript bundle.
+          if [ -n "${EXPO_PUBLIC_API_URL:-}" ] && ! unzip -p "dist/$name" assets/index.android.bundle | grep -a -q "$EXPO_PUBLIC_API_URL"; then
             echo "::error::The API URL was not found in the app bundle"
             exit 1
           fi
@@ -150,7 +162,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           {
             echo "### $name"
-            echo "- API: \`$EXPO_PUBLIC_API_URL\`"
+            echo "- Server: ${EXPO_PUBLIC_API_URL:-asked on first launch}"
             echo "- Size: $(du -h "dist/$name" | cut -f1)"
             echo "- Signed with release key: $SIGNED_WITH_RELEASE_KEY"
             echo "- Google Maps in app: $([ -n "$EXPO_PUBLIC_GOOGLE_MAPS_API_KEY" ] && echo yes || echo 'no (shows an Open in Maps link)')"
@@ -198,7 +210,7 @@ jobs:
 
   publish:
     needs: [build, launch-test]
-    if: inputs.publish
+    if: inputs.publish || startsWith(github.ref, 'refs/tags/mobile-v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -206,26 +218,48 @@ jobs:
           name: civicfix-apk
           path: dist
 
-      - name: Refuse to publish a debug-signed APK
-        env:
-          HAS_KEY: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
-        run: |
-          if [ "$HAS_KEY" != "true" ]; then
-            echo "::error::Add the ANDROID_KEYSTORE_* secrets before publishing an APK to citizens."
-            exit 1
-          fi
-
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           APK: dist/${{ needs.build.outputs.apk_name }}
-          TAG: mobile-v${{ needs.build.outputs.version }}-build${{ github.run_number }}
+          HAS_KEY: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
           API_URL: ${{ needs.build.outputs.api_url }}
+          RUN: ${{ github.run_number }}
+          VERSION: ${{ needs.build.outputs.version }}
         run: |
-          gh release create "$TAG" "$APK" \
+          # A pushed mobile-v* tag is used as is; manual and deploy runs get a new tag.
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then tag="$GITHUB_REF_NAME"; else tag="mobile-v${VERSION}-build${RUN}"; fi
+
+          if [ -n "$API_URL" ]; then
+            server="It connects to **${API_URL}**."
+          else
+            server="On first launch it asks for the CivicFix server address (shown on the deploy run's summary, e.g. \`https://….ecs.ap-south-1.on.aws\`)."
+          fi
+
+          if [ "$HAS_KEY" = "true" ]; then
+            title="CivicFix Android app (build ${RUN})"
+            flags=(--latest)
+            warning=""
+          else
+            # Without the release key the APK is signed with the public debug
+            # key: fine for testing, but phones will not let a properly signed
+            # build install over it later.
+            title="TEST BUILD - CivicFix Android app (build ${RUN})"
+            flags=(--prerelease)
+            warning="> [!WARNING]
+          > **Test build, not for citizens.** It is signed with a public debug key because the release signing secrets are not set up yet. Before installing an official build later, uninstall this one."
+          fi
+
+          notes="${warning}
+
+          Citizen app for Android. ${server}
+
+          **Install:** download the .apk below on an Android phone, open it, and allow installing from this source when asked."
+
+          gh release create "$tag" "$APK" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "CivicFix Android app (build ${{ github.run_number }})" \
-            --notes "Citizen app for Android. Connects to ${API_URL}.
-
-          **Install:** download the .apk below on your Android phone, open it, and allow installing from this source when asked. Newer builds install over older ones and keep you signed in."
+            --title "$title" \
+            --notes "$notes" \
+            "${flags[@]}"
+          echo "Published: $(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url --jq .url)" >> "$GITHUB_STEP_SUMMARY"

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import api, { setAuthToken, setUnauthorizedHandler } from '../utils/api';
+import api, { setAuthToken, setUnauthorizedHandler, loadSavedServer, saveServer } from '../utils/api';
 
 const TOKEN_KEY = '@civicfix/token';
 const USER_KEY = '@civicfix/user';
@@ -11,10 +11,14 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
   const [initializing, setInitializing] = useState(true);
+  const [serverUrl, setServerUrl] = useState('');
 
   useEffect(() => {
     const bootstrapAsync = async () => {
       try {
+        // The server address must be known before any request is made.
+        setServerUrl(await loadSavedServer());
+
         const [storedToken, storedUser] = await Promise.all([
           AsyncStorage.getItem(TOKEN_KEY),
           AsyncStorage.getItem(USER_KEY),
@@ -75,6 +79,14 @@ export const AuthProvider = ({ children }) => {
     await clearSession();
   };
 
+  // Accounts belong to one server, so switching servers signs the user out.
+  const changeServer = async (address) => {
+    const url = await saveServer(address);
+    await clearSession();
+    setServerUrl(url);
+    return url;
+  };
+
   // Any authenticated request that comes back 401 (token expired after 12 h,
   // or account removed) sends the user back to the login screen.
   useEffect(() => {
@@ -85,8 +97,8 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const value = useMemo(
-    () => ({ user, token, initializing, login, register, logout }),
-    [user, token, initializing]
+    () => ({ user, token, initializing, serverUrl, login, register, logout, changeServer }),
+    [user, token, initializing, serverUrl]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

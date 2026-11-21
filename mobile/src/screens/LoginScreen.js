@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 
 const LoginScreen = () => {
   const navigation = useNavigation();
-  const { login } = useAuth();
+  const { login, serverUrl } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -81,6 +81,12 @@ const LoginScreen = () => {
             <Text style={styles.link}> Create an account</Text>
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity onPress={() => navigation.navigate('Server')} style={styles.serverRow}>
+          <Text variant="bodySmall" style={styles.serverText}>
+            Server: {serverUrl ? serverUrl.replace(/^https?:\/\//, '') : 'not set'} · <Text style={styles.link}>Change</Text>
+          </Text>
+        </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
   );
@@ -119,6 +125,13 @@ const styles = StyleSheet.create({
   link: {
     color: '#2563eb',
     fontWeight: '600',
+  },
+  serverRow: {
+    marginTop: 32,
+    alignItems: 'center',
+  },
+  serverText: {
+    color: '#94a3b8',
   },
 });
 
