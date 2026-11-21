@@ -48,7 +48,12 @@ The platform is designed around **evidence validation, role-based workflows, and
 
 ## Key capabilities
 
-- Citizen registration and authentication.
+- Citizen registration and authentication; change password.
+- Issue categories (pothole, streetlight, garbage, water, drainage, …) with filters.
+- "My Reports" for citizens; staff see who reported each issue.
+- Public updates timeline: status changes, staff notes and resolution photos.
+- Admin overview statistics (by status and category, overdue, needs review, average time to resolve).
+- Staff management in the admin portal (add staff with one-time passwords, change roles, reset passwords).
 - Staff/admin role-based access.
 - Civic issue creation and lifecycle management.
 - Image upload controls.
@@ -66,7 +71,9 @@ The platform is designed around **evidence validation, role-based workflows, and
 - Docker/Render deployment configuration.
 - Vercel admin deployment configuration.
 - Expo EAS mobile deployment configuration.
-- GitHub Actions CI for backend/admin/mobile baseline verification.
+- GitHub Actions CI: backend unit/integration tests, admin build, mobile config, infrastructure lint, Docker image check.
+- End-to-end tests on every pull request: the admin portal in a real browser (Playwright) and the Android app on an emulator (Maestro), against a real API and database.
+- One-click AWS deployment (ECS Express Mode, RDS, CloudFront) and signed Android APK releases from GitHub Actions.
 
 ## Technology stack
 
