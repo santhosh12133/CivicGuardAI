@@ -52,6 +52,7 @@ const LoginScreen = () => {
 
         <TextInput
           label="Email"
+          testID="login-email"
           value={email}
           onChangeText={setEmail}
           autoCapitalize="none"
@@ -62,6 +63,7 @@ const LoginScreen = () => {
 
         <TextInput
           label="Password"
+          testID="login-password"
           value={password}
           onChangeText={setPassword}
           secureTextEntry
@@ -71,18 +73,18 @@ const LoginScreen = () => {
 
         {error && <HelperText type="error">{error}</HelperText>}
 
-        <Button mode="contained" onPress={handleLogin} loading={loading} style={styles.button}>
+        <Button mode="contained" onPress={handleLogin} loading={loading} style={styles.button} testID="login-submit">
           Sign In
         </Button>
 
         <View style={styles.footerRow}>
           <Text>New here?</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
+          <TouchableOpacity onPress={() => navigation.navigate('Signup')} testID="go-to-signup">
             <Text style={styles.link}> Create an account</Text>
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity onPress={() => navigation.navigate('Server')} style={styles.serverRow}>
+        <TouchableOpacity onPress={() => navigation.navigate('Server')} style={styles.serverRow} testID="change-server">
           <Text variant="bodySmall" style={styles.serverText}>
             Server: {serverUrl ? serverUrl.replace(/^https?:\/\//, '') : 'not set'} · <Text style={styles.link}>Change</Text>
           </Text>

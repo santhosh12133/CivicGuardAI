@@ -172,6 +172,7 @@ const HomeScreen = ({ navigation, mine = false }) => {
           {[{ id: "all", label: "All categories" }, ...categories].map((category) => (
             <Chip
               key={category.id}
+              testID={`filter-category-${category.id}`}
               icon={category.id === "all" ? "shape-outline" : CATEGORY_ICONS[category.id]}
               selected={categoryFilter === category.id}
               onPress={() => setCategoryFilter(category.id)}

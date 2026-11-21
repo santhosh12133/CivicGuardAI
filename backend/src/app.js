@@ -43,9 +43,12 @@ const createApp = () => {
   });
 
   // Global abuse protection. For multiple API instances, use a shared Redis-backed limiter.
+  // Requests per minute per client IP. Several staff behind one office
+  // connection share an IP, so keep this generous; RATE_LIMIT_MAX overrides it.
+  const rateLimitMax = Number.parseInt(process.env.RATE_LIMIT_MAX || '', 10) || 300;
   app.use(createRateLimiter({
     windowMs: 60 * 1000,
-    max: 120,
+    max: rateLimitMax,
     message: 'Too many requests. Please try again later.',
   }));
 

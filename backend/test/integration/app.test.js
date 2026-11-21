@@ -93,3 +93,33 @@ test('CORS preflight allows the methods the admin portal uses', async () => {
   assert.match(res.headers.get('access-control-allow-methods'), /PATCH/);
   assert.match(res.headers.get('access-control-allow-headers'), /Authorization/i);
 });
+
+test('the rate limit defaults to 300 requests a minute and can be configured', () => {
+  const { spawnSync } = require('child_process');
+  const path = require('path');
+  const script = `
+    process.env.RATE_LIMIT_MAX = process.argv[1] || '';
+    const { createApp } = require('./src/app');
+    const http = require('http');
+    const server = createApp().listen(0, async () => {
+      const port = server.address().port;
+      let blockedAt = null;
+      for (let i = 1; i <= 400 && blockedAt === null; i += 1) {
+        const res = await fetch('http://127.0.0.1:' + port + '/');
+        if (res.status === 429) blockedAt = i;
+      }
+      console.log(blockedAt);
+      process.exit(0);
+    });
+  `;
+  const run = (max) =>
+    spawnSync(process.execPath, ['-e', script, max], {
+      cwd: path.join(__dirname, '..', '..'),
+      env: { ...process.env },
+      encoding: 'utf8',
+    });
+  const byDefault = run('');
+  assert.equal(byDefault.stdout.trim().split('\n').pop(), '301', byDefault.stderr);
+  const custom = run('5');
+  assert.equal(custom.stdout.trim().split('\n').pop(), '6', custom.stderr);
+});

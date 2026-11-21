@@ -42,6 +42,7 @@ const ServerScreen = () => {
 
         <TextInput
           label="Server address"
+          testID="server-address"
           value={address}
           onChangeText={setAddress}
           autoCapitalize="none"
@@ -54,7 +55,7 @@ const ServerScreen = () => {
 
         {error && <HelperText type="error">{error}</HelperText>}
 
-        <Button mode="contained" onPress={handleConnect} loading={checking} disabled={checking} style={styles.button}>
+        <Button mode="contained" onPress={handleConnect} loading={checking} disabled={checking} style={styles.button} testID="server-connect">
           {checking ? 'Checking…' : 'Connect'}
         </Button>
         {checking && (

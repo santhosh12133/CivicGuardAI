@@ -1,0 +1,91 @@
+appId: com.civicfix.app
+name: A citizen reports a new issue with a gallery photo
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+- extendedWaitUntil:
+    visible: "Welcome Back.*"
+    timeout: 60000
+- tapOn:
+    id: "login-email"
+- inputText: ${ASHA_EMAIL}
+- tapOn:
+    id: "login-password"
+- inputText: ${ASHA_PASSWORD}
+- hideKeyboard
+- tapOn:
+    id: "login-submit"
+- extendedWaitUntil:
+    visible: "Hello, Asha"
+    timeout: 60000
+- tapOn: "Report"
+- extendedWaitUntil:
+    visible: "Report a Civic Issue"
+    timeout: 30000
+# A category is required
+- scrollUntilVisible:
+    element:
+      id: "report-submit"
+    direction: DOWN
+- tapOn:
+    id: "report-submit"
+- assertVisible: "Please choose what kind of problem this is"
+- scrollUntilVisible:
+    element:
+      id: "category-streetlight"
+    direction: UP
+- tapOn:
+    id: "category-streetlight"
+- tapOn:
+    id: "report-title"
+- inputText: "Flickering streetlight at park gate"
+- tapOn:
+    id: "report-description"
+- inputText: "Light flickers all night near the north gate."
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: "report-gallery"
+    direction: UP
+- tapOn:
+    id: "report-gallery"
+# Android's photo picker: choose the photo the test pushed to the gallery.
+- runFlow:
+    when:
+      visible: "Allow.*"
+    commands:
+      - tapOn: "Allow.*"
+- extendedWaitUntil:
+    visible: "Photo taken on.*"
+    timeout: 30000
+- takeScreenshot: 03-photo-picker
+- tapOn:
+    text: "Photo taken on.*"
+    index: 0
+- extendedWaitUntil:
+    visible:
+      id: "report-submit"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: "report-submit"
+    direction: DOWN
+- tapOn:
+    id: "report-submit"
+- runFlow:
+    when:
+      visible: "While using the app"
+    commands:
+      - tapOn: "While using the app"
+- extendedWaitUntil:
+    visible: "Flickering streetlight at park gate"
+    timeout: 120000
+- extendedWaitUntil:
+    visible: "Updates"
+    timeout: 60000
+- assertVisible: "Open"
+- assertVisible: "Streetlight"
+- assertVisible: "Your report"
+- takeScreenshot: 03-reported

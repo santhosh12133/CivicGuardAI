@@ -17,6 +17,7 @@ This file is the operational contract for configuration. Real secrets must never
 | `CORS_ORIGINS` | Production: yes | `https://admin.example.com` | No | Comma-separated browser origin allow-list. If empty in production the API still starts (the mobile app sends no `Origin`) but refuses every browser origin |
 | `API_HOST` | No | `api.example.com` | No | Host used in photo URLs. Leave unset on Render (the request's public host is used); set it for a custom API domain |
 | `API_PROTOCOL` | Production: yes | `https` | No | URL scheme used for generated URLs |
+| `RATE_LIMIT_MAX` | No | `300` | No | Requests per minute allowed from one IP address (default 300). Staff behind one office connection share an IP |
 | `GEOCODING_ENABLED` | No | `true` | No | Set to `false` to skip the Nominatim reverse-geocoding call and store a `Location (lat, lon)` label instead. Used by the test suite; also useful offline or during a provider outage |
 | `TEST_DATABASE_URL` | Tests only | `postgres://postgres:postgres@localhost:5432/civicguard_test` | Yes | Disposable database for `npm test`. Integration tests drop and recreate every table, so never point this at real data |
 | `DB_SYNC` | Transitional only | `false` | No | Explicit schema synchronization switch; do not rely on it for mature production migration management |

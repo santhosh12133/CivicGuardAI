@@ -32,11 +32,11 @@ const ChangePassword = ({ onDone }) => {
 
   return (
     <View>
-      <TextInput label="Current password" value={current} onChangeText={setCurrent} secureTextEntry mode="outlined" style={styles.input} />
-      <TextInput label="New password" value={next} onChangeText={setNext} secureTextEntry mode="outlined" style={styles.input} />
-      <TextInput label="Confirm new password" value={confirm} onChangeText={setConfirm} secureTextEntry mode="outlined" style={styles.input} />
+      <TextInput testID="password-current" label="Current password" value={current} onChangeText={setCurrent} secureTextEntry mode="outlined" style={styles.input} />
+      <TextInput testID="password-new" label="New password" value={next} onChangeText={setNext} secureTextEntry mode="outlined" style={styles.input} />
+      <TextInput testID="password-confirm" label="Confirm new password" value={confirm} onChangeText={setConfirm} secureTextEntry mode="outlined" style={styles.input} />
       {error && <HelperText type="error">{error}</HelperText>}
-      <Button mode="outlined" onPress={save} loading={saving} disabled={saving || !current || !next}>
+      <Button testID="password-save" mode="outlined" onPress={save} loading={saving} disabled={saving || !current || !next}>
         Save new password
       </Button>
     </View>
@@ -89,14 +89,14 @@ const ProfileScreen = () => {
             }}
           />
         ) : (
-          <Button mode="outlined" onPress={() => setChangingPassword(true)}>
+          <Button testID="change-password" mode="outlined" onPress={() => setChangingPassword(true)}>
             Change password
           </Button>
         )}
       </View>
 
       <View style={styles.section}>
-        <Button mode="contained" onPress={handleLogout} loading={loading} style={styles.button}>
+        <Button testID="sign-out" mode="contained" onPress={handleLogout} loading={loading} style={styles.button}>
           Sign Out
         </Button>
         <Text variant="bodySmall" style={styles.caption}>

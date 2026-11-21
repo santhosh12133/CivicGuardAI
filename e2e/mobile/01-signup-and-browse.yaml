@@ -1,0 +1,57 @@
+appId: com.civicfix.app
+name: Sign up, browse issues, filter by category, open an issue
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Welcome Back.*"
+    timeout: 60000
+- assertVisible: "Server: .*"
+- tapOn:
+    id: "go-to-signup"
+- tapOn:
+    id: "signup-name"
+- inputText: "Meera Citizen"
+- tapOn:
+    id: "signup-email"
+- inputText: ${NEW_EMAIL}
+- tapOn:
+    id: "signup-password"
+- inputText: "meera-password-1"
+- tapOn:
+    id: "signup-confirm"
+- inputText: "meera-password-1"
+- hideKeyboard
+- tapOn:
+    id: "signup-submit"
+- extendedWaitUntil:
+    visible: "Hello, Meera"
+    timeout: 60000
+- assertVisible: "Deep pothole on MG Road"
+- assertVisible: "Garbage pile on 5th Cross"
+- takeScreenshot: 01-home
+# Category filter
+- tapOn:
+    id: "filter-category-pothole"
+- assertVisible: "Deep pothole on MG Road"
+- assertNotVisible: "Garbage pile on 5th Cross"
+- takeScreenshot: 01-filtered
+- tapOn:
+    id: "filter-category-all"
+- assertVisible: "Garbage pile on 5th Cross"
+# Issue details are public, but this is not Meera's report
+- tapOn: "Deep pothole on MG Road"
+- extendedWaitUntil:
+    visible: "Updates"
+    timeout: 30000
+- assertVisible: "Pothole"
+- assertVisible: "Reported"
+- assertNotVisible: "Your report"
+- takeScreenshot: 01-detail
+- back
+# My Reports is empty for a new account
+- tapOn: "My Reports"
+- extendedWaitUntil:
+    visible: "You haven't reported anything yet."
+    timeout: 30000
+- takeScreenshot: 01-my-reports-empty

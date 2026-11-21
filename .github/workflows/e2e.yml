@@ -1,0 +1,179 @@
+name: End-to-end
+
+# Drives the real admin portal in a browser (Playwright) and the real Android
+# app on an emulator (Maestro) against a real API and PostgreSQL database
+# seeded by backend/test/e2e/seed.js.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ADMIN_EMAIL: admin@example.com
+  ADMIN_PASSWORD: admin-e2e-password-123
+  JWT_SECRET: e2e-only-secret-0123456789abcdef0123456789abcdef
+  DATABASE_URL: postgres://postgres:postgres@localhost:5432/civicfix_e2e
+  GEOCODING_ENABLED: "false"
+  # The tests make many requests from one IP address.
+  RATE_LIMIT_MAX: "100000"
+
+jobs:
+  admin-portal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: civicfix_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20.x"
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            admin/package-lock.json
+
+      - name: Start the API
+        working-directory: backend
+        run: |
+          npm ci
+          STAFF_PASSWORD="$ADMIN_PASSWORD" node scripts/create-staff-user.js --email "$ADMIN_EMAIL" --name "E2E Admin" --role admin
+          NODE_ENV=production DB_SYNC=true PORT=5000 CORS_ORIGINS=http://localhost:4173 \
+            nohup node server.js > "$RUNNER_TEMP/api.log" 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://localhost:5000/health && exit 0; sleep 2; done
+          cat "$RUNNER_TEMP/api.log"; exit 1
+
+      - name: Seed data
+        working-directory: backend
+        run: API_URL=http://localhost:5000 SEED_OUT="$RUNNER_TEMP/seed.json" node test/e2e/seed.js
+
+      - name: Build and serve the admin portal
+        working-directory: admin
+        run: |
+          npm ci
+          VITE_API_URL=http://localhost:5000/api npm run build
+          nohup npx vite preview --port 4173 --strictPort > "$RUNNER_TEMP/admin.log" 2>&1 &
+          for i in $(seq 1 30); do curl -fsS -o /dev/null http://localhost:4173/ && exit 0; sleep 1; done
+          cat "$RUNNER_TEMP/admin.log"; exit 1
+
+      - name: Run browser tests
+        working-directory: e2e/admin
+        env:
+          SEED_FILE: ${{ runner.temp }}/seed.json
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+          npx playwright test
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: admin-e2e-results
+          path: |
+            e2e/admin/playwright-report/
+            e2e/admin/test-results/
+            ${{ runner.temp }}/api.log
+
+  mobile-app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: civicfix_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20.x"
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            mobile/package-lock.json
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build a test APK that talks to the API on the host
+        working-directory: mobile
+        env:
+          # 10.0.2.2 is the host machine as seen from the Android emulator.
+          EXPO_PUBLIC_API_URL: http://10.0.2.2:5000
+        run: |
+          npm ci
+          npx expo prebuild --platform android --no-install
+          # Test build only: allow plain HTTP to the local test API.
+          sed -i 's/<application /<application android:usesCleartextTraffic="true" /' android/app/src/main/AndroidManifest.xml
+          echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g" >> android/gradle.properties
+          cd android && ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=x86_64
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/civicfix-e2e.apk"
+
+      - name: Start and seed the API
+        working-directory: backend
+        run: |
+          npm ci
+          STAFF_PASSWORD="$ADMIN_PASSWORD" node scripts/create-staff-user.js --email "$ADMIN_EMAIL" --name "E2E Admin" --role admin
+          NODE_ENV=production DB_SYNC=true PORT=5000 nohup node server.js > "$RUNNER_TEMP/api.log" 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://localhost:5000/health && break; sleep 2; done
+          API_URL=http://localhost:5000 SEED_OUT="$RUNNER_TEMP/seed.json" PHOTO_OUT="$RUNNER_TEMP/gallery.jpg" node test/e2e/seed.js
+
+      - name: Install Maestro
+        run: |
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run the app flows on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: bash .github/scripts/mobile-e2e.sh ${{ runner.temp }}/civicfix-e2e.apk ${{ runner.temp }}/gallery.jpg ${{ runner.temp }}/seed.json mobile-e2e-results
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mobile-e2e-results
+          path: |
+            mobile-e2e-results/
+            ${{ runner.temp }}/api.log

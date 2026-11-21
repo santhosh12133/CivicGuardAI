@@ -36,7 +36,7 @@ const IssueCard = ({ issue, onPress }) => {
     "https://images.unsplash.com/photo-1529429617124-aee711fa4eec?auto=format&fit=crop&w=800&q=60";
 
   return (
-    <Card style={styles.card} onPress={onPress}>
+    <Card style={styles.card} onPress={onPress} testID={`issue-card-${issue.id}`}>
       <Card.Cover
         source={{ uri: thumbnail }}
         style={styles.image}
