@@ -27,6 +27,8 @@ env_args=(
   -e "RAVI_EMAIL=$(jq -r .ravi.email "$SEED")"
   -e "RAVI_PASSWORD=$(jq -r .ravi.password "$SEED")"
   -e "NEW_EMAIL=meera.$(date +%s)@example.com"
+  -e "TEST_PHONE_NUMBER=${TEST_OTP_PHONE#+91}"
+  -e "TEST_PHONE_CODE=${TEST_OTP_CODE}"
 )
 
 failed=()

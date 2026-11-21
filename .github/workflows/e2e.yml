@@ -23,6 +23,16 @@ env:
   GEOCODING_ENABLED: "false"
   # The tests make many requests from one IP address.
   RATE_LIMIT_MAX: "100000"
+  AUTH_RATE_LIMIT_MAX: "100000"
+  # Codes are written to the API log instead of being emailed/texted; the
+  # browser test reads the password-reset code from there.
+  EMAIL_PROVIDER: log
+  SMS_PROVIDER: log
+  # A test phone number with a fixed code, for the app's phone sign-in flow.
+  TEST_OTP_PHONE: "+919999900001"
+  TEST_OTP_CODE: "246810"
+  # Very short access tokens, so both apps renew their session during the tests.
+  ACCESS_TOKEN_TTL: 30s
 
 jobs:
   admin-portal:
@@ -79,6 +89,7 @@ jobs:
         working-directory: e2e/admin
         env:
           SEED_FILE: ${{ runner.temp }}/seed.json
+          API_LOG: ${{ runner.temp }}/api.log
         run: |
           npm install --no-audit --no-fund
           npx playwright install --with-deps chromium

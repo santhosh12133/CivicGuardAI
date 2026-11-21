@@ -7,6 +7,8 @@ import { Ionicons } from "@expo/vector-icons";
 import LoginScreen from "../screens/LoginScreen";
 import SignupScreen from "../screens/SignupScreen";
 import ServerScreen from "../screens/ServerScreen";
+import PhoneLoginScreen from "../screens/PhoneLoginScreen";
+import ForgotPasswordScreen from "../screens/ForgotPasswordScreen";
 import HomeScreen, { MyReportsScreen } from "../screens/HomeScreen";
 import ReportScreen from "../screens/ReportScreen";
 import ProfileScreen from "../screens/ProfileScreen";
@@ -101,6 +103,8 @@ const AuthNavigator = ({ hasServer }) => (
     <Stack.Screen name="Login" component={LoginScreen} />
     <Stack.Screen name="Signup" component={SignupScreen} />
     <Stack.Screen name="Server" component={ServerScreen} />
+    <Stack.Screen name="PhoneLogin" component={PhoneLoginScreen} />
+    <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
   </Stack.Navigator>
 );
 

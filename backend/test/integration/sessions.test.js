@@ -109,7 +109,8 @@ test('"sign out everywhere" ends all sessions', async () => {
   const b = await login(email);
   const res = await api.request('POST', '/api/auth/logout-all', { token: a.token });
   assert.equal(res.status, 200);
-  assert.equal(res.body.sessions, 2);
+  // a, b, and the session createUser itself signed in with.
+  assert.equal(res.body.sessions, 3);
   assert.equal((await me(a.token)).status, 401);
   assert.equal((await me(b.token)).status, 401);
 });
@@ -123,7 +124,8 @@ test('changing your password signs out your other devices but not this one', asy
     json: { currentPassword: api.PASSWORD, newPassword: 'a-new-password-9' },
   });
   assert.equal(res.status, 200);
-  assert.equal(res.body.signedOutSessions, 1);
+  // "elsewhere" and the session createUser itself signed in with.
+  assert.equal(res.body.signedOutSessions, 2);
   assert.equal((await me(here.token)).status, 200);
   assert.equal((await me(elsewhere.token)).status, 401);
 });
@@ -171,7 +173,7 @@ test('sessions record the device and are removed with the account', async () => 
     json: { email, password: api.PASSWORD },
     headers: { 'User-Agent': 'CivicFix-Test/1.0' },
   });
-  const [session] = await Session.findAll({ where: { user_id: user.id } });
+  const session = await Session.findOne({ where: { user_id: user.id }, order: [['created_at', 'DESC']] });
   assert.equal(session.user_agent, 'CivicFix-Test/1.0');
   assert.equal(session.method, 'password');
   await User.destroy({ where: { id: user.id } });

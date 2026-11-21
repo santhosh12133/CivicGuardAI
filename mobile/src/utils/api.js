@@ -88,11 +88,35 @@ export const saveServer = async (input) => {
   return url;
 };
 
-// AuthContext registers a callback here so an expired or revoked token logs
-// the user out instead of leaving every request failing with 401.
+// AuthContext registers a callback here so a revoked session logs the user
+// out instead of leaving every request failing with 401.
 let unauthorizedHandler = null;
 export const setUnauthorizedHandler = (handler) => {
   unauthorizedHandler = handler;
+};
+
+// Access tokens last 15 minutes. AuthContext supplies the refresh token and
+// stores the renewed tokens; renewal happens here, once for all requests.
+let sessionHooks = { getRefreshToken: async () => null, onRenewed: async () => {} };
+export const setSessionHooks = (hooks) => {
+  sessionHooks = { ...sessionHooks, ...hooks };
+};
+
+let renewing = null;
+const renewSession = () => {
+  if (!renewing) {
+    renewing = (async () => {
+      const refreshToken = await sessionHooks.getRefreshToken();
+      if (!refreshToken) throw new Error("No session");
+      const { data } = await axios.post(`${baseUrl}/api/auth/refresh`, { refreshToken }, { timeout: 90000 });
+      setAuthToken(data.token);
+      await sessionHooks.onRenewed(data);
+      return data.token;
+    })().finally(() => {
+      renewing = null;
+    });
+  }
+  return renewing;
 };
 
 export const setAuthToken = (token) => {
@@ -125,7 +149,24 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    // Expired access token: renew it with the refresh token and try again.
+    const config = error.config || {};
+    const isAuthCall = /\/api\/auth\/(login|register|refresh|logout|password|otp|google)/.test(config.url || "");
+    if (error.response?.status === 401 && error.response.data?.code === "TOKEN_EXPIRED" && !config._retried && !isAuthCall) {
+      try {
+        const token = await renewSession();
+        config._retried = true;
+        config.headers = config.headers || {};
+        if (typeof config.headers.set === "function") config.headers.set("Authorization", `Bearer ${token}`);
+        else config.headers.Authorization = `Bearer ${token}`;
+        return api(config);
+      } catch (renewError) {
+        if (unauthorizedHandler) unauthorizedHandler();
+        return Promise.reject(new Error("Your session has expired. Please log in again."));
+      }
+    }
+
     if (!error.response) {
       // React Native keeps the underlying native error (e.g. an OkHttp
       // exception) on the XMLHttpRequest; log it so device logs explain
@@ -159,7 +200,7 @@ api.interceptors.response.use(
 
     if (status === 401) {
       const sentToken = Boolean(error.config?.headers?.Authorization);
-      if (sentToken && unauthorizedHandler) {
+      if (sentToken && !isAuthCall && unauthorizedHandler) {
         unauthorizedHandler();
         return Promise.reject(new Error("Your session has expired. Please log in again."));
       }

@@ -166,7 +166,7 @@ jobs:
               DbBackupRetentionDays="${{ vars.DB_BACKUP_DAYS || '7' }}" \
             || { show_failures "$BASE_STACK"; exit 1; }
 
-          for key in ImageRepositoryUri ClusterName ExecutionRoleArn InfrastructureRoleArn ApiLogGroupName \
+          for key in ImageRepositoryUri ClusterName ExecutionRoleArn InfrastructureRoleArn TaskRoleArn ApiLogGroupName \
                      JwtSecretArn DbSecretArn DbHost DbPort AdminBucketName AdminDistributionId AdminUrl; do
             echo "$key=$(output "$BASE_STACK" "$key")" >> "$GITHUB_ENV"
           done
@@ -197,7 +197,11 @@ jobs:
               ImageUri="$IMAGE_URI" ClusterName="$ClusterName" \
               ExecutionRoleArn="$ExecutionRoleArn" InfrastructureRoleArn="$InfrastructureRoleArn" \
               ApiLogGroupName="$ApiLogGroupName" JwtSecretArn="$JwtSecretArn" DbSecretArn="$DbSecretArn" \
-              DbHost="$DbHost" DbPort="$DbPort" CorsOrigins="$AdminUrl" \
+              DbHost="$DbHost" DbPort="$DbPort" CorsOrigins="$AdminUrl" TaskRoleArn="$TaskRoleArn" \
+              EmailFrom="${{ vars.EMAIL_FROM }}" EnableSms="${{ vars.ENABLE_SMS || 'false' }}" \
+              SmsSenderId="${{ vars.SMS_SENDER_ID }}" SmsEntityId="${{ vars.SMS_ENTITY_ID }}" \
+              SmsTemplateId="${{ vars.SMS_TEMPLATE_ID }}" \
+              GoogleClientId="${{ vars.GOOGLE_CLIENT_ID }}" GoogleClientSecretArn="${{ vars.GOOGLE_CLIENT_SECRET_ARN }}" \
             || { show_failures "$API_STACK"; echo "::error::Container logs: CloudWatch log group $ApiLogGroupName"; exit 1; }
 
       - name: Work out the public URLs

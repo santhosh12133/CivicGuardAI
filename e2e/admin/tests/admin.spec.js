@@ -6,6 +6,13 @@ const fs = require('fs');
 const path = require('path');
 
 const seed = JSON.parse(fs.readFileSync(process.env.SEED_FILE, 'utf8'));
+
+// The API runs with EMAIL_PROVIDER=log, so "sent" emails are in its log.
+const latestEmailCode = (email) => {
+  const lines = fs.readFileSync(process.env.API_LOG, 'utf8').split('\n');
+  const line = [...lines].reverse().find((l) => l.includes(`[notify:email] to ${email}`));
+  return line && line.match(/code is (\d{6})/)[1];
+};
 const RESOLUTION_PHOTO = path.join(__dirname, '..', '..', '..', 'backend', 'test', 'fixtures', 'streetlight.jpg');
 
 test.describe.configure({ mode: 'serial' });
@@ -219,6 +226,51 @@ test('a staff member signs in, cannot delete or manage staff, and changes their 
   await login(page, staffEmail, 'officer-new-password');
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
   staffPassword = 'officer-new-password';
+});
+
+test('a staff member resets a forgotten password with a code sent by email', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByRole('button', { name: 'Forgot password?' }).click();
+  const form = page.getByRole('form', { name: 'Reset password' });
+  await form.getByLabel(/Email Address/).fill(staffEmail);
+  await form.getByRole('button', { name: 'Send reset code' }).click();
+  await expect(page.getByText('If an account exists for that email')).toBeVisible();
+
+  await expect.poll(() => latestEmailCode(staffEmail)).toMatch(/^\d{6}$/);
+  await form.getByLabel('Code from the email').fill(latestEmailCode(staffEmail));
+  await form.getByLabel('New password', { exact: true }).fill('reset-by-email-77');
+  await form.getByLabel('Confirm new password').fill('reset-by-email-77');
+  await form.getByRole('button', { name: 'Set new password' }).click();
+  await expect(page.getByText('Password reset. You can sign in with your new password.')).toBeVisible();
+
+  await login(page, staffEmail, 'reset-by-email-77');
+  staffPassword = 'reset-by-email-77';
+});
+
+test('the session renews itself after the short-lived access token expires', async ({ page }) => {
+  // The API in this test run issues 30-second access tokens (ACCESS_TOKEN_TTL).
+  await login(page, seed.admin.email, seed.admin.password);
+  await page.waitForTimeout(32_000);
+  await page.getByRole('button', { name: 'Issues', exact: true }).click();
+  await expect(rows(page).first()).toBeVisible();
+  await expect(page).toHaveURL(/\/issues/);
+});
+
+test('signing out ends the session on the server', async ({ page }) => {
+  await login(page, seed.admin.email, seed.admin.password);
+  const token = await page.evaluate(() => localStorage.getItem('admin_token'));
+  await logout(page);
+  const res = await page.request.get(`${seed.api}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+  expect(res.status()).toBe(401);
+});
+
+test('five wrong passwords lock an account for 15 minutes', async ({ page }) => {
+  for (let i = 0; i < 5; i += 1) {
+    await login(page, seed.ravi.email, 'not-the-password', { expectSuccess: false });
+    await expect(page.getByText('Invalid credentials')).toBeVisible();
+  }
+  await login(page, seed.ravi.email, seed.ravi.password, { expectSuccess: false });
+  await expect(page.getByText(/Too many wrong passwords\. Try again in 15 minutes/)).toBeVisible();
 });
 
 test('admin resets a password and removes staff access', async ({ page }) => {

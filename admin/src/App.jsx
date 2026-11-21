@@ -8,17 +8,14 @@ import IssueDetails from './pages/IssueDetails';
 import Staff from './pages/Staff';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
-import { authAPI } from './api/api';
+import { authAPI, session } from './api/api';
 import { currentUser } from './categories';
 
-const clearSession = () => {
-  localStorage.removeItem('admin_token');
-  localStorage.removeItem('admin_user');
-};
+const clearSession = () => session.clear();
 
 const ProtectedLayout = ({ children, adminOnly = false }) => {
   const location = useLocation();
-  const token = localStorage.getItem('admin_token');
+  const token = session.token();
   const [user, setUser] = useState(currentUser);
 
   // Re-check the account with the server so a role change applies at once.

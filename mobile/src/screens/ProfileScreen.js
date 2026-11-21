@@ -4,7 +4,7 @@ import { Avatar, Button, Text, Divider, Snackbar, TextInput, HelperText } from '
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 
-const ChangePassword = ({ onDone }) => {
+const ChangePassword = ({ onDone, hasPassword }) => {
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -12,16 +12,17 @@ const ChangePassword = ({ onDone }) => {
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
+    if (hasPassword && !current) return setError('Enter your current password.');
     if (next.length < 8) return setError('The new password must be at least 8 characters.');
     if (next !== confirm) return setError('The new passwords do not match.');
     try {
       setSaving(true);
       setError(null);
-      await api.post('/api/auth/change-password', { currentPassword: current, newPassword: next });
+      await api.post('/api/auth/change-password', hasPassword ? { currentPassword: current, newPassword: next } : { newPassword: next });
       setCurrent('');
       setNext('');
       setConfirm('');
-      onDone('Password changed');
+      onDone(hasPassword ? 'Password changed. Your other devices were signed out.' : 'Password set. You can now also sign in with your email and password.');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -32,11 +33,13 @@ const ChangePassword = ({ onDone }) => {
 
   return (
     <View>
-      <TextInput testID="password-current" label="Current password" value={current} onChangeText={setCurrent} secureTextEntry mode="outlined" style={styles.input} />
+      {hasPassword && (
+        <TextInput testID="password-current" label="Current password" value={current} onChangeText={setCurrent} secureTextEntry mode="outlined" style={styles.input} />
+      )}
       <TextInput testID="password-new" label="New password" value={next} onChangeText={setNext} secureTextEntry mode="outlined" style={styles.input} />
       <TextInput testID="password-confirm" label="Confirm new password" value={confirm} onChangeText={setConfirm} secureTextEntry mode="outlined" style={styles.input} />
       {error && <HelperText type="error">{error}</HelperText>}
-      <Button testID="password-save" mode="outlined" onPress={save} loading={saving} disabled={saving || !current || !next}>
+      <Button testID="password-save" mode="outlined" onPress={save} loading={saving} disabled={saving || !next}>
         Save new password
       </Button>
     </View>
@@ -44,7 +47,9 @@ const ChangePassword = ({ onDone }) => {
 };
 
 const ProfileScreen = () => {
-  const { user, logout, serverUrl } = useAuth();
+  const { user, logout, logoutEverywhere, refreshUser, serverUrl } = useAuth();
+  const hasPassword = user?.has_password !== false;
+  const [signingOutAll, setSigningOutAll] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
@@ -68,7 +73,7 @@ const ProfileScreen = () => {
           {user?.name}
         </Text>
         <Text variant="bodyMedium" style={styles.email}>
-          {user?.email}
+          {user?.email || user?.phone}
         </Text>
         <Text variant="bodySmall" style={styles.role}>
           Role · {user?.role || 'citizen'}
@@ -83,14 +88,16 @@ const ProfileScreen = () => {
         </Text>
         {changingPassword ? (
           <ChangePassword
+            hasPassword={hasPassword}
             onDone={(text) => {
               setChangingPassword(false);
               setMessage(text);
+              refreshUser().catch(() => {});
             }}
           />
         ) : (
           <Button testID="change-password" mode="outlined" onPress={() => setChangingPassword(true)}>
-            Change password
+            {hasPassword ? 'Change password' : 'Set a password'}
           </Button>
         )}
       </View>
@@ -98,6 +105,22 @@ const ProfileScreen = () => {
       <View style={styles.section}>
         <Button testID="sign-out" mode="contained" onPress={handleLogout} loading={loading} style={styles.button}>
           Sign Out
+        </Button>
+        <Button
+          testID="sign-out-everywhere"
+          mode="text"
+          loading={signingOutAll}
+          onPress={async () => {
+            try {
+              setSigningOutAll(true);
+              await logoutEverywhere();
+            } catch (error) {
+              setMessage(error.message);
+              setSigningOutAll(false);
+            }
+          }}
+        >
+          Sign out on all devices
         </Button>
         <Text variant="bodySmall" style={styles.caption}>
           Connected to {serverUrl ? serverUrl.replace(/^https?:\/\//, '') : 'no server'}

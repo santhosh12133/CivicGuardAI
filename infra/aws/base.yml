@@ -164,6 +164,33 @@ Resources:
                 Resource:
                   - !Ref JwtSecret
                   - !Ref DbSecret
+                  # Secrets you add yourself, e.g. civicfix/google-client-secret
+                  - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:civicfix/*
+
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: civicfix-ecs-task
+      Description: What the CivicFix API itself may call - send emails (SES) and SMS codes (SNS).
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: send-codes
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: ses:SendEmail
+                Resource: "*"
+              # SMS to phone numbers (not topics) can only be scoped to "*".
+              - Effect: Allow
+                Action: sns:Publish
+                Resource: "*"
 
   InfrastructureRole:
     Type: AWS::IAM::Role
@@ -270,6 +297,8 @@ Outputs:
     Value: !GetAtt ExecutionRole.Arn
   InfrastructureRoleArn:
     Value: !GetAtt InfrastructureRole.Arn
+  TaskRoleArn:
+    Value: !GetAtt TaskRole.Arn
   ApiLogGroupName:
     Value: !Ref ApiLogGroup
   JwtSecretArn:

@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, KeyboardAvoidingView, Platform, TouchableOpacity, ScrollView } from 'react-native';
 import { Button, TextInput, Text, HelperText } from 'react-native-paper';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 
 const LoginScreen = () => {
   const navigation = useNavigation();
-  const { login, serverUrl } = useAuth();
+  const route = useRoute();
+  const { login, serverUrl, providers, authNotice, setAuthNotice, signInWithGoogle } = useAuth();
+  const notice = route.params?.notice;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -42,7 +44,7 @@ const LoginScreen = () => {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.inner}>
+      <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
         <Text variant="headlineLarge" style={styles.title}>
           Welcome Back 👋
         </Text>
@@ -71,11 +73,41 @@ const LoginScreen = () => {
           style={styles.input}
         />
 
+        {notice && !error && <HelperText type="info" style={styles.notice}>{notice}</HelperText>}
+        {authNotice && <HelperText type="error">{authNotice}</HelperText>}
         {error && <HelperText type="error">{error}</HelperText>}
 
         <Button mode="contained" onPress={handleLogin} loading={loading} style={styles.button} testID="login-submit">
           Sign In
         </Button>
+
+        {providers.passwordReset && (
+          <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} testID="go-to-forgot" style={styles.forgotRow}>
+            <Text style={styles.link}>Forgot password?</Text>
+          </TouchableOpacity>
+        )}
+
+        {(providers.phone || providers.google) && (
+          <View style={styles.altSection}>
+            <Text variant="bodySmall" style={styles.orText}>or</Text>
+            {providers.phone && (
+              <Button mode="outlined" icon="cellphone" onPress={() => navigation.navigate('PhoneLogin')} style={styles.altButton} testID="go-to-phone">
+                Continue with phone number
+              </Button>
+            )}
+            {providers.google && (
+              <Button
+                mode="outlined"
+                icon="google"
+                onPress={() => signInWithGoogle().catch((err) => setAuthNotice(err.message))}
+                style={styles.altButton}
+                testID="google-signin"
+              >
+                Continue with Google
+              </Button>
+            )}
+          </View>
+        )}
 
         <View style={styles.footerRow}>
           <Text>New here?</Text>
@@ -89,7 +121,7 @@ const LoginScreen = () => {
             Server: {serverUrl ? serverUrl.replace(/^https?:\/\//, '') : 'not set'} · <Text style={styles.link}>Change</Text>
           </Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 };
@@ -100,9 +132,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   inner: {
-    flex: 1,
+    flexGrow: 1,
+    paddingBottom: 32,
     paddingHorizontal: 24,
-    paddingTop: 120,
+    paddingTop: 96,
   },
   title: {
     fontWeight: '700',
@@ -127,6 +160,24 @@ const styles = StyleSheet.create({
   link: {
     color: '#2563eb',
     fontWeight: '600',
+  },
+  notice: {
+    color: '#15803d',
+  },
+  forgotRow: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  altSection: {
+    marginTop: 20,
+    gap: 10,
+  },
+  orText: {
+    textAlign: 'center',
+    color: '#94a3b8',
+  },
+  altButton: {
+    paddingVertical: 2,
   },
   serverRow: {
     marginTop: 32,

@@ -17,6 +17,7 @@ import {
   Logout as LogoutIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { adminAuth } from '../api/api';
 
 const drawerWidth = 250;
 
@@ -24,9 +25,9 @@ const Sidebar = ({ user }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleLogout = () => {
-    localStorage.removeItem('admin_token');
-    localStorage.removeItem('admin_user');
+  // Ends the session on the server too, so the tokens stop working.
+  const handleLogout = async () => {
+    await adminAuth.logout();
     navigate('/login');
   };
 
