@@ -73,10 +73,12 @@ name: A citizen reports a new issue with a gallery photo
 - tapOn:
     text: "Photo taken on.*"
     index: 0
+# Back in the app with the photo previewed above the buttons.
 - extendedWaitUntil:
     visible:
-      id: "report-submit"
+      id: "report-gallery"
     timeout: 30000
+- takeScreenshot: 03-photo-picked
 - scrollUntilVisible:
     element:
       id: "report-submit"

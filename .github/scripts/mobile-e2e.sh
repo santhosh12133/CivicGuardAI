@@ -41,6 +41,12 @@ for flow in "$FLOWS"/0*.yaml; do
   else
     echo "::error::Mobile flow failed: $name"
     failed+=("$name")
+    echo "Screen at the time of failure (text and ids):"
+    maestro hierarchy 2>/dev/null \
+      | jq -r '.. | .attributes? // empty | [(.text // ""), (."resource-id" // ""), (.accessibilityText // "")] | map(select(. != "")) | join(" | ")' 2>/dev/null \
+      | grep -v '^$' | head -60 || true
+    echo "App log:"
+    adb logcat -d -s ReactNativeJS:V AndroidRuntime:E 2>/dev/null | tail -30 || true
   fi
   adb logcat -d > "$OUT/logcat-$name.txt" 2>/dev/null || true
   echo "::endgroup::"
