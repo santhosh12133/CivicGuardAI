@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
-  CivicFix shared infrastructure: container registry, PostgreSQL (RDS),
+  CivicFix shared infrastructure: container registry, PostgreSQL 17 (RDS),
   secrets, IAM roles for the API service, and S3 + CloudFront hosting for the
   admin portal. Deployed by .github/workflows/deploy-aws.yml.
 
@@ -101,7 +101,7 @@ Resources:
     Properties:
       DBInstanceIdentifier: civicfix-db
       Engine: postgres
-      EngineVersion: "16"
+      EngineVersion: "17"
       DBInstanceClass: !Ref DbInstanceClass
       DBName: civicfix
       MasterUsername: !Sub "{{resolve:secretsmanager:${DbSecret}:SecretString:username}}"

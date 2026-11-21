@@ -20,7 +20,7 @@ Static checks
 The repository currently runs:
 
 - backend dependency installation and `node --check server.js`;
-- backend unit and integration tests (`npm test`) against a PostgreSQL 16 service container;
+- backend unit and integration tests (`npm test`) against a PostgreSQL 17 service container;
 - admin dependency installation and production build;
 - mobile dependency installation and `npx expo config --type public`.
 
@@ -35,7 +35,7 @@ cd backend
 npm run test:unit                      # no database needed
 
 # Integration tests need a DISPOSABLE database; every table is dropped and recreated.
-docker run --rm -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=civicguard_test postgres:16
+docker run --rm -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=civicguard_test postgres:17
 TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/civicguard_test npm test
 ```
 

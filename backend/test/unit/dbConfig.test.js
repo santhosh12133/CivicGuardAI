@@ -63,8 +63,14 @@ test('DATABASE_SSL with a CA bundle verifies the server certificate', () => {
   assert.match(config.ssl.ca, /BEGIN CERTIFICATE/);
 });
 
-test('sslmode=require in the URL turns SSL on', () => {
-  const { config, stderr } = inspect({ DATABASE_URL: 'postgres://a:b@db.example.test/x?sslmode=require' });
+test('sslmode=require in the URL turns SSL on and keeps the CA and verification settings', () => {
+  const { config, stderr } = inspect({
+    DATABASE_URL: 'postgres://a:b@db.example.test:5432/x?sslmode=require',
+    DATABASE_SSL_CA: path.join(__dirname, '..', 'fixtures', 'test-ca.pem'),
+  });
   assert.ok(config, stderr);
   assert.equal(config.ssl.require, true);
+  assert.equal(config.ssl.rejectUnauthorized, true);
+  assert.match(config.ssl.ca, /BEGIN CERTIFICATE/);
+  assert.equal(config.database, 'x');
 });

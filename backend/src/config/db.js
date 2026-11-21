@@ -6,10 +6,10 @@ require('dotenv').config();
 // local) or from separate parts (DB_HOST, DB_PORT, DB_NAME, DB_USER,
 // DB_PASSWORD; AWS, where the password is injected from Secrets Manager and
 // may contain characters that would need escaping in a URL).
-const databaseUrl = process.env.DATABASE_URL;
+const rawDatabaseUrl = process.env.DATABASE_URL;
 const host = process.env.DB_HOST;
 
-if (!databaseUrl && !host) {
+if (!rawDatabaseUrl && !host) {
   throw new Error('Set DATABASE_URL, or DB_HOST with DB_NAME, DB_USER and DB_PASSWORD');
 }
 
@@ -18,9 +18,23 @@ if (!databaseUrl && !host) {
 // (which requires it). Turn it on with DATABASE_SSL=true or sslmode=require in
 // the URL. Render's *internal* URL (what the API uses inside Render) does not
 // need it.
-const sslRequested =
-  process.env.DATABASE_SSL === 'true' ||
-  /[?&]sslmode=(require|verify-ca|verify-full)/.test(databaseUrl || '');
+const sslModeInUrl = /[?&]sslmode=(require|verify-ca|verify-full)\b/.test(rawDatabaseUrl || '');
+const sslRequested = process.env.DATABASE_SSL === 'true' || sslModeInUrl;
+
+// Sequelize copies URL query parameters such as sslmode into the driver
+// options, where they would replace the SSL settings below (dropping the CA
+// and verification choice). This file handles sslmode itself, so remove it.
+const withoutSslMode = (url) => {
+  if (!url) return url;
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.delete('sslmode');
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+};
+const databaseUrl = withoutSslMode(rawDatabaseUrl);
 
 const dialectOptions = { application_name: 'CivicFixBackend' };
 if (sslRequested) {
