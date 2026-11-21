@@ -62,7 +62,8 @@ const main = async () => {
       title: 'Streetlight out near bus stop',
       description: 'Dark for a week, unsafe at night.',
       category: 'streetlight',
-      photo_url: `${API}/uploads/${pothole.photo_url.split('/').pop()}`,
+      // A remote photo URL (no EXIF to check), so the report is flagged for review.
+      photo_url: 'https://images.example.com/report.jpg',
       latitude: BENGALURU.lat + 0.001,
       longitude: BENGALURU.lon,
     },
@@ -79,7 +80,8 @@ const main = async () => {
       title: 'Garbage pile on 5th Cross',
       description: 'Not collected for three days.',
       category: 'garbage',
-      photo_url: `${API}/uploads/${pothole.photo_url.split('/').pop()}`,
+      // A remote photo URL (no EXIF to check), so the report is flagged for review.
+      photo_url: 'https://images.example.com/report.jpg',
       latitude: BENGALURU.lat,
       longitude: BENGALURU.lon + 0.001,
     },
