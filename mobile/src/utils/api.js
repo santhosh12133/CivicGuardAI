@@ -107,6 +107,19 @@ api.interceptors.request.use((config) => {
   if (!baseUrl) {
     return Promise.reject(new Error("No server is set. Add the server address on the login screen."));
   }
+  // Photo uploads: on Android, axios otherwise sends FormData labelled
+  // "application/x-www-form-urlencoded", which React Native's networking
+  // refuses to encode ("multipart != application/x-www-form-urlencoded"),
+  // so every upload failed with "Network Error". React Native adds the
+  // multipart boundary itself.
+  if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+    config.headers = config.headers || {};
+    if (typeof config.headers.set === "function") {
+      config.headers.set("Content-Type", "multipart/form-data");
+    } else {
+      config.headers["Content-Type"] = "multipart/form-data";
+    }
+  }
   return config;
 });
 
