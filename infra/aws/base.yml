@@ -98,6 +98,14 @@ Resources:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
+    Metadata:
+      cfn-lint:
+        config:
+          # cfn-lint only knows full minor versions and reports a bare major
+          # version as deprecated. RDS accepts "17" and picks the current
+          # default minor version, which keeps this template from going stale.
+          ignore_checks:
+            - W3691
     Properties:
       DBInstanceIdentifier: civicfix-db
       Engine: postgres
