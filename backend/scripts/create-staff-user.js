@@ -41,7 +41,9 @@ const usage = () => {
 };
 
 const main = async () => {
-  const { email, name, role = 'staff' } = parseArgs(process.argv.slice(2));
+  const args = parseArgs(process.argv.slice(2));
+  const { name, role = 'staff' } = args;
+  const email = String(args.email || '').trim().toLowerCase();
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !name) usage();
   if (!STAFF_ROLES.includes(role)) {
     console.error(`--role must be one of: ${STAFF_ROLES.join(', ')}`);

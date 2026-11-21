@@ -19,7 +19,12 @@ const authenticateToken = (req, res, next) => {
     req.user = decoded;
     return next();
   } catch (error) {
-    return res.status(401).json({ message: 'Invalid or expired token' });
+    // Clients refresh their session when they see code TOKEN_EXPIRED.
+    const expired = error.name === 'TokenExpiredError';
+    return res.status(401).json({
+      message: expired ? 'Your session has expired' : 'Invalid or expired token',
+      code: expired ? 'TOKEN_EXPIRED' : 'TOKEN_INVALID',
+    });
   }
 };
 
@@ -31,7 +36,18 @@ const makeLoadUser = ({ required }) => async (req, res, next) => {
   try {
     // Required here so this module can be loaded without a database (unit tests).
     const { User } = require('../models');
-    const user = await User.findByPk(req.user.userId, { attributes: ['id', 'role'] });
+    const { isSessionActive } = require('../services/sessions');
+    const [user, sessionActive] = await Promise.all([
+      User.findByPk(req.user.userId, { attributes: ['id', 'role'] }),
+      isSessionActive(req.user.sid),
+    ]);
+    if (user && !sessionActive) {
+      if (!required) {
+        req.user = undefined;
+        return next();
+      }
+      return res.status(401).json({ message: 'You have been signed out. Please sign in again.', code: 'SESSION_ENDED' });
+    }
     if (!user) {
       if (!required) {
         req.user = undefined;
