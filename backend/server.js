@@ -3,7 +3,8 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 const { createApp } = require('./src/app');
-const { connectDB, sequelize } = require('./src/config/db');
+const { connectDB } = require('./src/config/db');
+const { syncSchema } = require('./src/config/schema');
 
 const isProduction = process.env.NODE_ENV === 'production';
 const allowDatabaseSync = process.env.DB_SYNC === 'true';
@@ -24,7 +25,7 @@ const startServer = async () => {
     // This project currently has no migration runner. Production keeps sync disabled by
     // default; DB_SYNC=true is an explicit bootstrap switch for first deployment.
     if (!isProduction || allowDatabaseSync) {
-      await sequelize.sync();
+      await syncSchema();
     }
 
     const app = createApp();

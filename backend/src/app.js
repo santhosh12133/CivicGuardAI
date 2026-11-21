@@ -25,7 +25,7 @@ const createApp = () => {
       error.statusCode = 403;
       return callback(error);
     },
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     optionsSuccessStatus: 204,
   };

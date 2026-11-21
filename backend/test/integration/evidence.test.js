@@ -348,20 +348,27 @@ test('/uploads only serves names the API generated', async () => {
   }
 });
 
-test('deleting an issue removes its photos', async () => {
+test('deleting an issue removes its photos, including timeline photos', async () => {
   const created = await report({ gps: MG_ROAD }, MG_ROAD)();
   assert.equal(created.status, 201);
   const name = photoName(created.body.photo_url);
+
+  const form = new FormData();
+  form.append('status', 'Resolved');
+  form.append('image', new Blob([await makePhoto({ fixture: 'streetlight.jpg' })], { type: 'image/jpeg' }), 'fixed.jpg');
+  const resolved = await api.request('PUT', `/api/issues/${created.body.id}`, { token: staff.token, form });
+  const resolutionName = photoName(resolved.body.resolved_photo_url);
 
   const del = await api.request('DELETE', `/api/issues/${created.body.id}`, { token: admin.token });
   assert.equal(del.status, 204);
 
   assert.equal(await Photo.findByPk(name), null);
+  assert.equal(await Photo.findByPk(resolutionName), null);
   assert.equal(fs.existsSync(path.join(UPLOADS_DIR, name)), false);
   assert.equal((await fetch(created.body.photo_url)).status, 404);
 });
 
-test('replacing a resolution photo removes the previous one', async () => {
+test('replacing a resolution photo keeps the previous one for the timeline', async () => {
   const created = await report({ gps: MG_ROAD }, MG_ROAD)();
   const resolve = async () => {
     const form = new FormData();
@@ -376,10 +383,15 @@ test('replacing a resolution photo removes the previous one', async () => {
   const second = await resolve();
   assert.notEqual(first, second);
 
-  await sleep(100); // removal of the old photo runs after the response
-  assert.equal(await Photo.findByPk(photoName(first)), null);
+  assert.ok(await Photo.findByPk(photoName(first)), 'earlier timeline photo is kept');
   assert.ok(await Photo.findByPk(photoName(second)));
   assert.ok(await Photo.findByPk(photoName(created.body.photo_url)), 'the original evidence photo is kept');
+
+  // Both resolution photos appear in the public timeline.
+  const detail = await api.request('GET', `/api/issues/${created.body.id}`);
+  const photos = detail.body.updates.map((update) => update.photo_url).filter(Boolean);
+  assert.deepEqual(photos, [first, second]);
+  assert.equal((await fetch(first)).status, 200);
 });
 
 test('pruneOrphanUploads also removes unreferenced photos from the database', async () => {

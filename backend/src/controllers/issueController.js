@@ -1,5 +1,14 @@
 const { validationResult } = require('express-validator');
-const { Issue, statuses } = require('../models');
+const { Op, fn, col, QueryTypes } = require('sequelize');
+const { Issue, IssueUpdate, sequelize, statuses } = require('../models');
+const { CATEGORIES, CATEGORY_IDS, DEFAULT_CATEGORY } = require('../constants/categories');
+const {
+  isStaff,
+  reporterInclude,
+  detailIncludes,
+  detailOrder,
+  serializeIssue,
+} = require('../utils/serializeIssue');
 const { reverseGeocode } = require('../utils/geocoding');
 const { computePHash, findSimilarImages } = require('../utils/phash');
 const { getCaptureDate, checkPhotoAge } = require('../utils/photoDate');
@@ -34,6 +43,7 @@ const createIssue = async (req, res, next) => {
     }
 
     const { title, description, latitude, longitude } = req.body;
+    const category = req.body.category || DEFAULT_CATEGORY;
 
     // Convert latitude and longitude to numbers if they're strings
     let lat = parseFloat(latitude);
@@ -391,6 +401,8 @@ const createIssue = async (req, res, next) => {
     const issue = await Issue.create({
       title,
       description,
+      category,
+      user_id: req.user.userId,
       photo_url: photoUrl,
       latitude,
       longitude,
@@ -400,8 +412,16 @@ const createIssue = async (req, res, next) => {
       needs_review,
       phash,
     });
+    // First entry of the public timeline.
+    await IssueUpdate.create({
+      issue_id: issue.id,
+      user_id: req.user.userId,
+      to_status: 'Open',
+    });
+
     console.log('✅ Issue created successfully:', issue.id);
-    return res.status(201).json(issue);
+    const created = await Issue.findByPk(issue.id, { include: detailIncludes, order: detailOrder });
+    return res.status(201).json(serializeIssue(created, req.user));
   } catch (error) {
     console.error('❌ CREATE ISSUE ERROR:', error.message);
     console.error('Stack:', error.stack);
@@ -409,10 +429,91 @@ const createIssue = async (req, res, next) => {
   }
 };
 
+// GET /api/issues?status=Open&category=pothole&mine=true&needs_review=true
 const getIssues = async (req, res, next) => {
   try {
-    const issues = await Issue.findAll({ order: [['created_at', 'DESC']] });
-    return res.json(issues);
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const where = {};
+    if (req.query.status) where.status = req.query.status;
+    if (req.query.category) where.category = req.query.category;
+    if (req.query.needs_review === 'true') where.needs_review = true;
+    if (req.query.mine === 'true') {
+      if (!req.user) {
+        return res.status(401).json({ message: 'Sign in to see your reports' });
+      }
+      where.user_id = req.user.userId;
+    }
+
+    const issues = await Issue.findAll({
+      where,
+      include: isStaff(req.user) ? [reporterInclude] : [],
+      order: [['created_at', 'DESC']],
+    });
+    return res.json(issues.map((issue) => serializeIssue(issue, req.user)));
+  } catch (error) {
+    return next(error);
+  }
+};
+
+// GET /api/issues/categories
+const getCategories = (req, res) => res.json(CATEGORIES);
+
+// GET /api/issues/stats (staff/admin)
+const getStats = async (req, res, next) => {
+  try {
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const countBy = async (column) => {
+      const rows = await Issue.findAll({
+        attributes: [column, [fn('COUNT', col('id')), 'count']],
+        group: [column],
+        raw: true,
+      });
+      return Object.fromEntries(rows.map((row) => [row[column], Number(row.count)]));
+    };
+
+    const [byStatusRaw, byCategoryRaw, total, needsReview, reportedLast7, resolvedLast7, overdue, avgRows] =
+      await Promise.all([
+        countBy('status'),
+        countBy('category'),
+        Issue.count(),
+        Issue.count({ where: { needs_review: true, status: { [Op.ne]: 'Resolved' } } }),
+        Issue.count({ where: { created_at: { [Op.gte]: weekAgo } } }),
+        IssueUpdate.count({
+          where: { to_status: 'Resolved', created_at: { [Op.gte]: weekAgo } },
+          distinct: true,
+          col: 'issue_id',
+        }),
+        Issue.count({ where: { status: { [Op.ne]: 'Resolved' }, created_at: { [Op.lt]: weekAgo } } }),
+        // Time from report to the first "Resolved" for issues that are resolved now.
+        sequelize.query(
+          `SELECT AVG(EXTRACT(EPOCH FROM (u.resolved_at - i.created_at))) / 3600 AS hours
+             FROM issues i
+             JOIN (SELECT issue_id, MIN(created_at) AS resolved_at
+                     FROM issue_updates WHERE to_status = 'Resolved' GROUP BY issue_id) u
+               ON u.issue_id = i.id
+            WHERE i.status = 'Resolved'`,
+          { type: QueryTypes.SELECT }
+        ),
+      ]);
+
+    const byStatus = Object.fromEntries(statuses.map((status) => [status, byStatusRaw[status] || 0]));
+    const byCategory = Object.fromEntries(CATEGORY_IDS.map((id) => [id, byCategoryRaw[id] || 0]));
+    const hours = avgRows[0] && avgRows[0].hours !== null ? Number(avgRows[0].hours) : null;
+
+    return res.json({
+      total,
+      byStatus,
+      byCategory,
+      needsReview,
+      overdue,
+      last7Days: { reported: reportedLast7, resolved: resolvedLast7 },
+      avgResolutionHours: hours === null ? null : Math.round(hours * 10) / 10,
+    });
   } catch (error) {
     return next(error);
   }
@@ -425,11 +526,11 @@ const getIssueById = async (req, res, next) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const issue = await Issue.findByPk(req.params.id);
+    const issue = await Issue.findByPk(req.params.id, { include: detailIncludes, order: detailOrder });
     if (!issue) {
       return res.status(404).json({ message: 'Issue not found' });
     }
-    return res.json(issue);
+    return res.json(serializeIssue(issue, req.user));
   } catch (error) {
     return next(error);
   }
@@ -456,7 +557,15 @@ const updateIssue = async (req, res, next) => {
     // (for example when uploading a file only). Safely default to an
     // empty object so destructuring doesn't throw.
     const body = req.body || {};
-    let { title, description, photo_url, latitude, longitude, status } = body;
+    let { title, description, photo_url, latitude, longitude, status, category } = body;
+    // A note for the timeline, e.g. "Crew scheduled for Monday".
+    const note = typeof body.note === 'string' ? body.note.trim() : '';
+    if (note.length > 1000) {
+      return res.status(400).json({ message: 'Note must be 1000 characters or fewer' });
+    }
+    if (category !== undefined && !CATEGORY_IDS.includes(category)) {
+      return res.status(400).json({ message: 'Unknown category' });
+    }
 
     // When status is sent as a multipart form field, it may be a string.
     // Ensure we're comparing against the correct value.
@@ -472,6 +581,7 @@ const updateIssue = async (req, res, next) => {
       ...(latitude !== undefined && { latitude }),
       ...(longitude !== undefined && { longitude }),
       ...(status !== undefined && { status }),
+      ...(category !== undefined && { category }),
     };
 
     // If a file was uploaded (multipart request), construct the public URL
@@ -502,7 +612,7 @@ const updateIssue = async (req, res, next) => {
       }
     }
 
-    if (!Object.keys(updates).length) {
+    if (!Object.keys(updates).length && !note) {
       return res.status(400).json({ message: 'No updates provided' });
     }
 
@@ -510,23 +620,32 @@ const updateIssue = async (req, res, next) => {
       return res.status(400).json({ message: 'Invalid status provided' });
     }
 
-    // Photos this update replaces; removed once the update has succeeded.
-    const replacedPhotos = ['photo_url', 'resolved_photo_url']
-      .filter((field) => updates[field] !== undefined && issue[field] && updates[field] !== issue[field])
-      .map((field) => issue[field]);
-
     if (req.file) {
       await savePhoto(req.file);
     }
 
-    await issue.update(updates);
-
-    if (replacedPhotos.length) {
-      deletePhotos(...replacedPhotos).catch((error) =>
-        console.warn('Could not remove replaced photo:', error.message)
-      );
+    const previousStatus = issue.status;
+    if (Object.keys(updates).length) {
+      await issue.update(updates);
     }
-    return res.json(issue);
+
+    // Record what citizens should see in the timeline. Replaced photos are kept
+    // because earlier timeline entries still show them.
+    const statusChanged = updates.status !== undefined && updates.status !== previousStatus;
+    const addedPhoto = req.file ? updates.resolved_photo_url || updates.photo_url : null;
+    if (statusChanged || note || addedPhoto) {
+      await IssueUpdate.create({
+        issue_id: issue.id,
+        user_id: req.user.userId,
+        from_status: statusChanged ? previousStatus : null,
+        to_status: statusChanged ? updates.status : null,
+        note: note || null,
+        photo_url: addedPhoto,
+      });
+    }
+
+    const updated = await Issue.findByPk(issue.id, { include: detailIncludes, order: detailOrder });
+    return res.json(serializeIssue(updated, req.user));
   } catch (error) {
     return next(error);
   }
@@ -546,9 +665,13 @@ const deleteIssue = async (req, res, next) => {
       return res.status(404).json({ message: 'Issue not found' });
     }
 
+    const timelinePhotos = (await IssueUpdate.findAll({ where: { issue_id: id }, attributes: ['photo_url'], raw: true }))
+      .map((update) => update.photo_url)
+      .filter(Boolean);
+    await IssueUpdate.destroy({ where: { issue_id: id } });
     await issue.destroy();
     // The issue's photos are no longer reachable from anywhere; free the space.
-    await deletePhotos(issue.photo_url, issue.resolved_photo_url).catch((error) =>
+    await deletePhotos(issue.photo_url, issue.resolved_photo_url, ...timelinePhotos).catch((error) =>
       console.warn('Could not remove photos of deleted issue:', error.message)
     );
 
@@ -561,6 +684,8 @@ const deleteIssue = async (req, res, next) => {
 module.exports = {
   createIssue,
   getIssues,
+  getCategories,
+  getStats,
   getIssueById,
   updateIssue,
   deleteIssue,

@@ -1,5 +1,6 @@
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/db');
+const { CATEGORY_IDS, DEFAULT_CATEGORY } = require('../constants/categories');
 
 const statuses = ['Open', 'In Progress', 'Resolved'];
 
@@ -57,6 +58,22 @@ const Issue = sequelize.define(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false,
+    },
+    // What kind of problem it is (see constants/categories.js). A string rather
+    // than an ENUM so new categories need no database migration.
+    category: {
+      type: DataTypes.STRING(30),
+      allowNull: false,
+      defaultValue: DEFAULT_CATEGORY,
+      validate: {
+        isIn: [CATEGORY_IDS],
+      },
+    },
+    // The citizen who reported it. Null for reports made before this was
+    // recorded, or if the account is later removed.
+    user_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
     },
     status: {
       type: DataTypes.ENUM(...statuses),

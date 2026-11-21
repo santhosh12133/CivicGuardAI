@@ -80,3 +80,16 @@ test('the API can connect using DB_HOST/DB_NAME/DB_USER/DB_PASSWORD (as on AWS)'
   );
   assert.equal(result.status, 0, result.stderr);
 });
+
+test('CORS preflight allows the methods the admin portal uses', async () => {
+  const res = await api.request('OPTIONS', '/api/auth/users/00000000-0000-4000-8000-000000000000', {
+    headers: {
+      Origin: 'http://admin.test',
+      'Access-Control-Request-Method': 'PATCH',
+      'Access-Control-Request-Headers': 'authorization,content-type',
+    },
+  });
+  assert.equal(res.status, 204);
+  assert.match(res.headers.get('access-control-allow-methods'), /PATCH/);
+  assert.match(res.headers.get('access-control-allow-headers'), /Authorization/i);
+});

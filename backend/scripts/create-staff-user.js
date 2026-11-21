@@ -16,6 +16,7 @@ require('dotenv').config();
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const { sequelize, User, roles } = require('../src/models');
+const { syncSchema } = require('../src/config/schema');
 
 const STAFF_ROLES = roles.filter((role) => role !== 'citizen');
 
@@ -58,7 +59,7 @@ const main = async () => {
 
   await sequelize.authenticate();
   // Creates the tables on a brand-new database (no-op when they exist).
-  await sequelize.sync();
+  await syncSchema();
 
   const hashed = await bcrypt.hash(password, 10);
   const existing = await User.findOne({ where: { email } });

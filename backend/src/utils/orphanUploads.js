@@ -1,15 +1,15 @@
 const fs = require('fs/promises');
 const path = require('path');
 const { Op } = require('sequelize');
-const { Issue, Photo } = require('../models');
+const { Issue, IssueUpdate, Photo } = require('../models');
 const { UPLOADS_DIR, UPLOAD_NAME, photoNameFromUrl } = require('./photoStore');
 
 // Skip recent items: they may belong to a request that is still being processed.
 const DEFAULT_MIN_AGE_MS = 60 * 60 * 1000;
 
 /**
- * Finds uploaded photos that no issue references (photo_url or
- * resolved_photo_url), both files in uploads/ and rows in the photos table.
+ * Finds uploaded photos that no issue references (photo_url,
+ * resolved_photo_url, or a timeline entry's photo), both files in uploads/ and rows in the photos table.
  * Typical sources: rejected reports saved by older versions of the API, or
  * issues deleted before photos were cleaned up with them. Deletes them
  * unless dryRun.
@@ -24,12 +24,14 @@ const pruneOrphanUploads = async ({
   now = Date.now(),
 } = {}) => {
   const issues = await Issue.findAll({ attributes: ['photo_url', 'resolved_photo_url'], raw: true });
+  const timeline = await IssueUpdate.findAll({ attributes: ['photo_url'], where: { photo_url: { [Op.ne]: null } }, raw: true });
   const referenced = new Set();
-  for (const issue of issues) {
-    for (const url of [issue.photo_url, issue.resolved_photo_url]) {
-      const name = photoNameFromUrl(url);
-      if (name) referenced.add(name);
-    }
+  for (const url of [
+    ...issues.flatMap((issue) => [issue.photo_url, issue.resolved_photo_url]),
+    ...timeline.map((update) => update.photo_url),
+  ]) {
+    const name = photoNameFromUrl(url);
+    if (name) referenced.add(name);
   }
 
   // Files on local disk.

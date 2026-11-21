@@ -1,14 +1,18 @@
 const express = require('express');
-const { body, param } = require('express-validator');
+const { body, param, query } = require('express-validator');
+const { CATEGORY_IDS } = require('../constants/categories');
 const {
   createIssue,
   getIssues,
+  getCategories,
+  getStats,
   getIssueById,
   updateIssue,
   deleteIssue,
 } = require('../controllers/issueController');
 const {
-  authenticateToken,
+  requireAuth,
+  identifyUser,
   authorizeRoles,
 } = require('../middleware/authMiddleware');
 const upload = require('../middleware/upload');
@@ -38,6 +42,17 @@ const createIssueValidation = [
     .optional()
     .equals('Open')
     .withMessage('New issues always start as Open'),
+  body('category')
+    .optional()
+    .isIn(CATEGORY_IDS)
+    .withMessage('Unknown category'),
+];
+
+const listValidation = [
+  query('status').optional().isIn(['Open', 'In Progress', 'Resolved']).withMessage('Unknown status'),
+  query('category').optional().isIn(CATEGORY_IDS).withMessage('Unknown category'),
+  query('mine').optional().isIn(['true', 'false']),
+  query('needs_review').optional().isIn(['true', 'false']),
 ];
 
 const updateIssueValidation = [
@@ -64,20 +79,31 @@ const updateIssueValidation = [
     .optional()
     .isIn(['Open', 'In Progress', 'Resolved'])
     .withMessage('Status must be Open, In Progress, or Resolved'),
+  body('category')
+    .optional()
+    .isIn(CATEGORY_IDS)
+    .withMessage('Unknown category'),
+  body('note')
+    .optional()
+    .isString()
+    .isLength({ max: 1000 })
+    .withMessage('Note must be 1000 characters or fewer'),
 ];
 
 router.post(
   '/',
-  authenticateToken,
+  requireAuth,
   upload.single('image'),
   createIssueValidation,
   createIssue
 );
-router.get('/', getIssues);
-router.get('/:id', issueIdValidation, getIssueById);
+router.get('/', identifyUser, listValidation, getIssues);
+router.get('/categories', getCategories);
+router.get('/stats', requireAuth, authorizeRoles('staff', 'admin'), getStats);
+router.get('/:id', identifyUser, issueIdValidation, getIssueById);
 router.put(
   '/:id',
-  authenticateToken,
+  requireAuth,
   authorizeRoles('staff', 'admin'),
   upload.single('image'),
   issueIdValidation,
@@ -86,7 +112,7 @@ router.put(
 );
 router.delete(
   '/:id',
-  authenticateToken,
+  requireAuth,
   authorizeRoles('admin'),
   issueIdValidation,
   deleteIssue
