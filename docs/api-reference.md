@@ -96,27 +96,99 @@ Response:
 
 The deployed session strategy should follow the authentication requirements documented in the security guide; browser localStorage token storage remains a hardening item rather than evidence of a complete secure-session architecture.
 
+### GET `/api/auth/me`
+
+Signed in. Returns `{ "user": { id, name, email, role } }` with the role as currently stored (roles can change after a token was issued; every authenticated request re-checks the account, so a removed account gets `401` and a changed role applies immediately).
+
+### POST `/api/auth/change-password`
+
+Signed in. Body `{ "currentPassword": "...", "newPassword": "..." }` (new: 8+ characters, different from the current one). `400` if the current password is wrong.
+
+### Account management (admin only)
+
+| Method and path | Body | Result |
+|---|---|---|
+| `GET /api/auth/users?role=staff,admin` | | `{ users, count }`; `role` filter optional |
+| `POST /api/auth/staff` | `{ name, email, role: "staff" \| "admin" }` | `201 { user, temporaryPassword }`; `409` if the email exists |
+| `PATCH /api/auth/users/:id` | `{ role: "citizen" \| "staff" \| "admin" }` | `{ user }`; `400` for your own account |
+| `POST /api/auth/users/:id/reset-password` | | `{ user, temporaryPassword }` |
+
+Temporary passwords are shown once; the person should change them after signing in.
+
 ## 4. Issue endpoints
+
+### Who sees what
+
+Issue reads are public, but responses depend on who is asking (send the bearer token when signed in):
+
+| Field | Anonymous / other citizens | The reporting citizen | Staff / admin |
+|---|---|---|---|
+| Issue, photos, category, status, timeline | ✓ | ✓ | ✓ |
+| `is_mine` | `false` | `true` | `true` only for their own |
+| `reporter` (`{ id, name, email }`) and `user_id` | — | — | ✓ |
+| Timeline author name of a citizen | hidden (`null`) | ✓ (their own) | ✓ |
+| Timeline author name of staff/admin | ✓ | ✓ | ✓ |
+
+An invalid or expired token on these public endpoints is treated as anonymous.
 
 ### GET `/api/issues`
 
-Returns issue records for list views.
+Returns an array of issues, newest first.
 
-Authentication: currently public.
+Query parameters (all optional):
 
-Security consideration: public read access means the API must be reviewed for privacy exposure, pagination, abuse protection, and whether citizen-created issue data should be globally discoverable.
+| Parameter | Values | Effect |
+|---|---|---|
+| `status` | `Open`, `In Progress`, `Resolved` | Only that status |
+| `category` | a category id | Only that category |
+| `mine` | `true` | Only the signed-in user's reports (`401` when not signed in) |
+| `needs_review` | `true` | Only issues flagged for manual review |
+
+Unknown values return `400`.
+
+### GET `/api/issues/categories`
+
+Public. Returns `[{ "id": "pothole", "label": "Pothole" }, ...]`. Current ids: `pothole`, `road_damage`, `streetlight`, `garbage`, `water_supply`, `drainage`, `traffic_signal`, `fallen_tree`, `other`.
+
+### GET `/api/issues/stats`
+
+Staff and admin only (`401` without a token, `403` for citizens).
+
+```json
+{
+  "total": 42,
+  "byStatus": { "Open": 20, "In Progress": 12, "Resolved": 10 },
+  "byCategory": { "pothole": 15, "streetlight": 9, "garbage": 8, "...": 0 },
+  "needsReview": 4,
+  "overdue": 6,
+  "last7Days": { "reported": 11, "resolved": 5 },
+  "avgResolutionHours": 51.3
+}
+```
+
+`needsReview` counts unresolved flagged issues; `overdue` counts unresolved issues older than 7 days; `avgResolutionHours` is the mean time from report to first "Resolved" for issues resolved now (`null` if none).
 
 ### GET `/api/issues/:id`
 
-Returns one issue by UUID.
+Returns one issue by UUID, including its timeline:
 
-Authentication: currently public.
-
-Path validation:
-
-```text
-id must be a UUID
+```json
+{
+  "id": "…",
+  "title": "Streetlight out near bus stop",
+  "category": "streetlight",
+  "status": "In Progress",
+  "is_mine": true,
+  "updates": [
+    { "id": "…", "from_status": null, "to_status": "Open", "note": null, "photo_url": null,
+      "created_at": "…", "author": { "role": "citizen", "name": "Asha", "is_me": true } },
+    { "id": "…", "from_status": "Open", "to_status": "In Progress", "note": "Crew scheduled for Monday",
+      "photo_url": null, "created_at": "…", "author": { "role": "staff", "name": "Ravi K", "is_me": false } }
+  ]
+}
 ```
+
+`400` for a malformed id, `404` if it does not exist.
 
 ### POST `/api/issues`
 
@@ -137,6 +209,7 @@ Form fields:
 | `latitude` | decimal | required | -90 to 90 |
 | `longitude` | decimal | required | -180 to 180 |
 | `status` | enum | optional | Only `Open` is accepted; any other value returns `400`. New issues always start `Open`, and only staff/admin can change status (via `PUT`) |
+| `category` | string | optional | A category id; defaults to `other` |
 | `image` | file | optional by route, strongly preferred | Validated by Multer/evidence pipeline |
 | `photo_url` | URL | optional | Backward-compatible fallback |
 
@@ -154,7 +227,7 @@ curl -X POST "$API_URL/api/issues" \
 
 Processing includes coordinate validation, optional reverse geocoding, EXIF inspection, photo-date checks, GPS consistency checks, pHash computation, and similar-image detection. fileciteturn263file0L2-L2
 
-Success should be a `201 Created` response containing the persisted issue object and any review flags exposed by the current controller contract.
+Returns `201` with the issue (as in `GET /api/issues/:id`). The report is linked to the signed-in user and its timeline starts with a "reported" entry.
 
 ### PUT `/api/issues/:id`
 
@@ -175,11 +248,15 @@ Optional fields include:
   "latitude": 12.971599,
   "longitude": 77.594566,
   "status": "In Progress",
+  "category": "drainage",
+  "note": "Crew scheduled for Monday",
   "photo_url": "https://example.com/resolution.jpg"
 }
 ```
 
-An optional multipart image may also be supplied for resolution evidence.
+`note` (up to 1000 characters) is shown to citizens in the timeline; a note on its own is a valid update. A status change, note or uploaded photo each add a timeline entry. An optional multipart `image` is stored as the resolution photo when the issue is (or becomes) `Resolved`, otherwise as the issue photo; earlier photos stay in the timeline.
+
+Returns the updated issue with its timeline.
 
 ### DELETE `/api/issues/:id`
 
@@ -191,7 +268,7 @@ Role:
 admin
 ```
 
-This endpoint must reject authenticated citizens and staff.
+This endpoint must reject authenticated citizens and staff. It also deletes the issue's timeline and photos.
 
 ## 5. Validation contract
 

@@ -55,6 +55,16 @@ Integration tests read `TEST_DATABASE_URL` only, never `DATABASE_URL`, so a deve
 
 Evidence tests stamp the fixture images in `test/fixtures/` with EXIF dates and GPS at run time using ExifTool, so photo age is always relative to the current clock.
 
+## End-to-end tests
+
+`.github/workflows/e2e.yml` runs on every pull request. Both jobs start the real API on a fresh PostgreSQL database and seed it through the public API with `backend/test/e2e/seed.js` (two citizens, three issues in different categories, one with a real camera-stamped photo, and a staff note).
+
+**Admin portal** (`e2e/admin`, Playwright, Chromium): citizen and wrong-password sign-in refused; Overview statistics and links into filtered lists; issue list category/reporter columns, filters, search and needs-review; deep-link refresh; issue page reporter, photo and timeline; status, category and note updates; resolving with a resolution photo; statistics updating; adding staff with a one-time password; a staff member's restricted view and password change; role changes and password reset; deleting issues; sign-out.
+
+**Android app** (`e2e/mobile`, Maestro, API 34 emulator): sign-up and browsing with category filter and issue details; My Reports with the "Your report" badge and the staff timeline; reporting an issue with a category and a gallery photo through the real evidence checks; changing password (old one refused, new one works); server-address validation.
+
+Failures upload screenshots, traces, device logs and the API log as workflow artifacts.
+
 ### Evidence gaps closed by this suite
 
 These were found by the first version of the suite and are now enforced by regular tests:
