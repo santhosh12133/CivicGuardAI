@@ -74,9 +74,23 @@ for (const [label, overrides] of [
   });
 }
 
-test('a citizen cannot create an issue that is already Resolved', { todo: 'POST /api/issues accepts status from any role; new reports should always start Open' }, async () => {
-  const res = await api.request('POST', '/api/issues', { token: citizen.token, json: validIssue({ status: 'Resolved' }) });
-  assert.ok(res.status === 400 || res.body.status === 'Open', `got ${res.status} / ${res.body.status}`);
+for (const [who, status] of [
+  ['citizen', 'Resolved'],
+  ['citizen', 'In Progress'],
+  ['staff', 'Resolved'],
+  ['admin', 'Resolved'],
+]) {
+  test(`${who} cannot create an issue that is already ${status}`, async () => {
+    const { token } = { citizen, staff, admin }[who];
+    const res = await api.request('POST', '/api/issues', { token, json: validIssue({ status }) });
+    assert.equal(res.status, 400, JSON.stringify(res.body));
+    assert.match(JSON.stringify(res.body), /always start as Open/);
+  });
+}
+
+test('sending status Open explicitly on create is allowed', async () => {
+  const issue = await createIssue({ status: 'Open' });
+  assert.equal(issue.status, 'Open');
 });
 
 // ---------- read ----------

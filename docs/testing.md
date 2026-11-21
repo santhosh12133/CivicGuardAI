@@ -46,22 +46,23 @@ Integration tests read `TEST_DATABASE_URL` only, never `DATABASE_URL`, so a deve
 | Unit | `test/unit/rateLimiter.test.js` | limit, 429 + `Retry-After`, per-IP buckets, window reset |
 | Unit | `test/unit/errorHandler.test.js` | 5xx message hiding in production, 4xx passthrough |
 | Unit | `test/unit/authMiddleware.test.js` | valid/missing/expired/forged/`alg=none` tokens, role checks |
+| Unit | `test/unit/photoDate.test.js` | capture-date tag order, ignoring filesystem dates, 24 h / future / unknown-timezone rules |
 | Unit | `test/unit/phash.test.js` | Hamming distance, similarity threshold, hashing the fixtures |
 | Integration | `test/integration/app.test.js` | health, security headers, CORS allow/deny, body limits |
 | Integration | `test/integration/auth.test.js` | registration, privileged-role rejection, login, user listing by role |
 | Integration | `test/integration/issues.test.js` | issue CRUD, validation boundaries, citizen/staff/admin/anonymous access |
-| Integration | `test/integration/evidence.test.js` | EXIF presence, 24 h photo age, 200 m GPS check in all hemispheres, pHash duplicates, upload limits, resolution photos |
+| Integration | `test/integration/evidence.test.js` | EXIF presence, capture-date rules, 200 m GPS check in all hemispheres, pHash duplicates, upload limits, resolution photos, removal of rejected uploads, orphan-upload pruning |
 
 Evidence tests stamp the fixture images in `test/fixtures/` with EXIF dates and GPS at run time using ExifTool, so photo age is always relative to the current clock.
 
-### Known gaps recorded as TODO tests
+### Evidence gaps closed by this suite
 
-Tests marked `todo` describe behavior that should change. They run and report, but do not fail the build:
+These were found by the first version of the suite and are now enforced by regular tests:
 
-- New issues accept `status` from any role, so a citizen can file an issue that is already `Resolved`.
-- A photo without `DateTimeOriginal` falls back to `FileModifyDate`, which is the server upload time, so the 24-hour rule is bypassed.
-- Photos dated in the future are accepted.
-- Rejected uploads remain in `uploads/` and are publicly served.
+- New issues always start `Open`; any other `status` on create returns `400` (`issues.test.js`).
+- Capture dates come only from embedded metadata, never `FileModifyDate`, so stripping `DateTimeOriginal` no longer bypasses the 24-hour rule (`evidence.test.js`, `photoDate.test.js`).
+- Photos dated more than 15 minutes in the future are rejected (`evidence.test.js`, `photoDate.test.js`).
+- Files from rejected requests are deleted from `uploads/`, and `npm run prune-uploads` removes files leaked by older versions (`evidence.test.js`).
 
 ## Backend test priorities
 

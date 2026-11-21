@@ -49,9 +49,31 @@ const toClientError = (error) => {
   return clientError;
 };
 
+// Multer saves the file before the controller validates it. If the request
+// then fails (bad fields, rejected evidence, missing issue, server error),
+// remove the file so rejected photos are not kept or served from /uploads.
+const discardFileOnFailure = (req, res) => {
+  if (!req.file || !req.file.path) return;
+  const filePath = req.file.path;
+  res.on('finish', () => {
+    if (res.statusCode < 400) return;
+    fs.unlink(filePath, (error) => {
+      if (error && error.code !== 'ENOENT') {
+        console.warn('Could not remove rejected upload:', path.basename(filePath), error.code);
+      }
+    });
+  });
+};
+
 module.exports = {
+  uploadsDir,
   single: (fieldName) => {
     const handler = upload.single(fieldName);
-    return (req, res, next) => handler(req, res, (error) => next(error ? toClientError(error) : undefined));
+    return (req, res, next) =>
+      handler(req, res, (error) => {
+        if (error) return next(toClientError(error));
+        discardFileOnFailure(req, res);
+        return next();
+      });
   },
 };

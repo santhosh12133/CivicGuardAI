@@ -136,7 +136,7 @@ Form fields:
 | `description` | string | required | Non-empty after trimming |
 | `latitude` | decimal | required | -90 to 90 |
 | `longitude` | decimal | required | -180 to 180 |
-| `status` | enum | optional | `Open`, `In Progress`, `Resolved` |
+| `status` | enum | optional | Only `Open` is accepted; any other value returns `400`. New issues always start `Open`, and only staff/admin can change status (via `PUT`) |
 | `image` | file | optional by route, strongly preferred | Validated by Multer/evidence pipeline |
 | `photo_url` | URL | optional | Backward-compatible fallback |
 

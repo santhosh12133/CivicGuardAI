@@ -14,7 +14,8 @@
     "view-users": "node scripts/view-users.js",
     "fix-address": "node scripts/fix-address-column.js",
     "fix-needs-review": "node scripts/add-needs-review-column.js",
-    "add-phash": "node scripts/add-phash-column.js"
+    "add-phash": "node scripts/add-phash-column.js",
+    "prune-uploads": "node scripts/prune-orphan-uploads.js"
   },
   "keywords": [],
   "author": "",

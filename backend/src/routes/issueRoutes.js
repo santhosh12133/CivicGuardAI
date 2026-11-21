@@ -32,10 +32,12 @@ const createIssueValidation = [
   body('longitude')
     .isFloat({ min: -180, max: 180 })
     .withMessage('Longitude is invalid'),
+  // New reports always start Open. Moving an issue to In Progress or Resolved
+  // is a staff/admin action through PUT /api/issues/:id.
   body('status')
     .optional()
-    .isIn(['Open', 'In Progress', 'Resolved'])
-    .withMessage('Status must be Open, In Progress, or Resolved'),
+    .equals('Open')
+    .withMessage('New issues always start as Open'),
 ];
 
 const updateIssueValidation = [

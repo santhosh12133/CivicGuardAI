@@ -171,28 +171,141 @@ test('a citizen cannot upload a resolution photo', async () => {
   assert.equal(res.status, 403);
 });
 
-// ---------- known gaps (reported as TODO, do not fail the build) ----------
+// ---------- capture date rules ----------
 
-test('a camera photo with no capture date is not treated as fresh', {
-  todo: 'without DateTimeOriginal the controller falls back to FileModifyDate, which is the server upload time, so the 24-hour rule is bypassed',
-}, async () => {
+test('a camera photo with no capture date is rejected', async () => {
+  // Previously the server's own file-save time was used, so this passed as "fresh".
   const res = await report({ gps: MG_ROAD, takenAt: null }, MG_ROAD)();
-  assert.ok(res.status === 400 || res.body.needs_review === true, `got ${res.status}, needs_review=${res.body.needs_review}`);
-});
-
-test('a photo dated in the future is not accepted as fresh', {
-  todo: 'photo age is only checked against the 24-hour maximum; future capture dates pass',
-}, async () => {
-  const res = await report({ gps: MG_ROAD, takenAt: new Date(Date.now() + 48 * HOUR) }, MG_ROAD)();
-  assert.ok(res.status === 400 || res.body.needs_review === true, `got ${res.status}, needs_review=${res.body.needs_review}`);
-});
-
-test('rejected photos are not left in the public uploads folder', {
-  todo: 'multer writes the file before validation; rejected evidence stays on disk and is served from /uploads',
-}, async () => {
-  const before = new Set(fs.readdirSync(UPLOADS_DIR));
-  const res = await report({ bare: true }, MG_ROAD)();
   assert.equal(res.status, 400);
-  const leftover = fs.readdirSync(UPLOADS_DIR).filter((name) => !before.has(name));
-  assert.deepEqual(leftover, []);
+  assert.match(res.body.message, /no date metadata/i);
+});
+
+test('a photo dated in the future is rejected', async () => {
+  const res = await report({ gps: MG_ROAD, takenAt: new Date(Date.now() + 48 * HOUR) }, MG_ROAD)();
+  assert.equal(res.status, 400);
+  assert.match(res.body.message, /in the future/i);
+});
+
+test('a phone clock a few minutes fast is tolerated', async () => {
+  const res = await report({ gps: MG_ROAD, takenAt: new Date(Date.now() + 5 * 60 * 1000) }, MG_ROAD)();
+  assert.equal(res.status, 201, JSON.stringify(res.body));
+});
+
+test('CreateDate is used when DateTimeOriginal is missing', async () => {
+  const res = await report({ gps: MG_ROAD, dateTag: 'CreateDate' }, MG_ROAD)();
+  assert.equal(res.status, 201, JSON.stringify(res.body));
+  assert.equal(res.body.needs_review, false);
+});
+
+test('a fresh photo with no timezone information is accepted but flagged for review', async () => {
+  const res = await report({ gps: null, zone: false }, MG_ROAD)();
+  assert.equal(res.status, 201, JSON.stringify(res.body));
+  assert.equal(res.body.needs_review, true);
+});
+
+// ---------- rejected uploads are removed ----------
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Runs a request and returns any files it left in uploads/. Cleanup happens
+// when the response finishes, so poll briefly before deciding.
+const uploadsLeftBy = async (action) => {
+  const before = new Set(fs.readdirSync(UPLOADS_DIR));
+  const res = await action();
+  let leftover = [];
+  for (let i = 0; i < 20; i += 1) {
+    leftover = fs.readdirSync(UPLOADS_DIR).filter((name) => !before.has(name));
+    if (!leftover.length) break;
+    await sleep(50);
+  }
+  return { res, leftover };
+};
+
+for (const [label, action, expectedStatus] of [
+  ['no camera metadata', report({ bare: true }, MG_ROAD), 400],
+  ['a stale photo', report({ gps: MG_ROAD, takenAt: new Date(Date.now() - 72 * HOUR) }, MG_ROAD), 400],
+  ['a future-dated photo', report({ gps: MG_ROAD, takenAt: new Date(Date.now() + 48 * HOUR) }, MG_ROAD), 400],
+  ['a GPS mismatch', report({ gps: CHENNAI }, MG_ROAD), 400],
+  ['a missing title', report({ gps: MG_ROAD }, MG_ROAD, { title: '' }), 400],
+]) {
+  test(`a report rejected for ${label} leaves no file in uploads/`, async () => {
+    const { res, leftover } = await uploadsLeftBy(action);
+    assert.equal(res.status, expectedStatus, JSON.stringify(res.body));
+    assert.deepEqual(leftover, []);
+  });
+}
+
+test('an accepted report keeps its photo', async () => {
+  const res = await report({ gps: MG_ROAD }, MG_ROAD)();
+  assert.equal(res.status, 201);
+  const name = res.body.photo_url.split('/').pop();
+  await sleep(100);
+  assert.ok(fs.existsSync(path.join(UPLOADS_DIR, name)));
+});
+
+test('a rejected staff update leaves no file in uploads/', async () => {
+  const created = await report({ gps: MG_ROAD }, MG_ROAD)();
+  const photo = await makePhoto({ fixture: 'streetlight.jpg' });
+
+  const missingIssue = () => {
+    const form = new FormData();
+    form.append('status', 'Resolved');
+    form.append('image', new Blob([photo], { type: 'image/jpeg' }), 'fixed.jpg');
+    return api.request('PUT', '/api/issues/00000000-0000-4000-8000-000000000000', { token: staff.token, form });
+  };
+  const badStatus = () => {
+    const form = new FormData();
+    form.append('status', 'Closed');
+    form.append('image', new Blob([photo], { type: 'image/jpeg' }), 'fixed.jpg');
+    return api.request('PUT', `/api/issues/${created.body.id}`, { token: staff.token, form });
+  };
+
+  const first = await uploadsLeftBy(missingIssue);
+  assert.equal(first.res.status, 404);
+  assert.deepEqual(first.leftover, []);
+
+  const second = await uploadsLeftBy(badStatus);
+  assert.equal(second.res.status, 400);
+  assert.deepEqual(second.leftover, []);
+});
+
+// ---------- cleaning up files leaked by older versions ----------
+
+test('pruneOrphanUploads removes old unreferenced uploads only', async () => {
+  const { pruneOrphanUploads } = require('../../src/utils/orphanUploads');
+
+  const accepted = await report({ gps: MG_ROAD }, MG_ROAD)();
+  assert.equal(accepted.status, 201);
+  const referenced = accepted.body.photo_url.split('/').pop();
+
+  const twoHoursAgo = new Date(Date.now() - 2 * HOUR);
+  const oldOrphan = `issue-${Date.now()}-${'a'.repeat(24)}.jpg`;
+  const newOrphan = `issue-${Date.now()}-${'b'.repeat(24)}.jpg`;
+  const unrelated = 'keep-me.txt';
+  for (const name of [oldOrphan, newOrphan, unrelated]) {
+    fs.writeFileSync(path.join(UPLOADS_DIR, name), 'x');
+  }
+  fs.utimesSync(path.join(UPLOADS_DIR, oldOrphan), twoHoursAgo, twoHoursAgo);
+  fs.utimesSync(path.join(UPLOADS_DIR, referenced), twoHoursAgo, twoHoursAgo);
+  fs.utimesSync(path.join(UPLOADS_DIR, unrelated), twoHoursAgo, twoHoursAgo);
+
+  try {
+    const dryRun = await pruneOrphanUploads({ dryRun: true });
+    assert.ok(dryRun.orphans.includes(oldOrphan));
+    assert.ok(!dryRun.orphans.includes(newOrphan), 'recent files are skipped');
+    assert.ok(!dryRun.orphans.includes(referenced), 'referenced files are kept');
+    assert.ok(!dryRun.orphans.includes(unrelated), 'files the API did not create are ignored');
+    assert.deepEqual(dryRun.deleted, []);
+    assert.ok(fs.existsSync(path.join(UPLOADS_DIR, oldOrphan)), 'dry run deletes nothing');
+
+    const real = await pruneOrphanUploads({ dryRun: false });
+    assert.ok(real.deleted.includes(oldOrphan));
+    assert.equal(fs.existsSync(path.join(UPLOADS_DIR, oldOrphan)), false);
+    assert.equal(fs.existsSync(path.join(UPLOADS_DIR, referenced)), true);
+    assert.equal(fs.existsSync(path.join(UPLOADS_DIR, newOrphan)), true);
+  } finally {
+    for (const name of [oldOrphan, newOrphan, unrelated]) {
+      fs.rmSync(path.join(UPLOADS_DIR, name), { force: true });
+    }
+  }
 });

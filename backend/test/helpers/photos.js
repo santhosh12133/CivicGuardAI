@@ -20,6 +20,8 @@ const exifDate = (date) => date.toISOString().slice(0, 19).replace('T', ' ').rep
  * @param {{lat:number, lon:number}|null} [opts.gps] - embedded GPS; null to omit
  * @param {boolean} [opts.camera] - write Make/Model
  * @param {boolean} [opts.bare] - return the fixture with no EXIF at all
+ * @param {boolean} [opts.zone] - write a UTC offset for the date (false = timezone unknown)
+ * @param {string} [opts.dateTag] - 'DateTimeOriginal' or 'CreateDate'
  */
 const makePhoto = async ({
   fixture = 'pothole.jpg',
@@ -27,6 +29,8 @@ const makePhoto = async ({
   gps = null,
   camera = true,
   bare = false,
+  zone = true,
+  dateTag = 'DateTimeOriginal',
 } = {}) => {
   const source = path.join(FIXTURES, fixture);
   if (bare) return fs.readFile(source);
@@ -36,7 +40,13 @@ const makePhoto = async ({
 
   const tags = {};
   if (camera) Object.assign(tags, { Make: 'TestCam', Model: 'Fixture One' });
-  if (takenAt) Object.assign(tags, { DateTimeOriginal: exifDate(takenAt), OffsetTimeOriginal: '+00:00' });
+  if (takenAt) {
+    tags[dateTag] = exifDate(takenAt);
+    if (zone) {
+      // OffsetTimeOriginal pairs with DateTimeOriginal, OffsetTimeDigitized with CreateDate.
+      tags[dateTag === 'CreateDate' ? 'OffsetTimeDigitized' : 'OffsetTimeOriginal'] = '+00:00';
+    }
+  }
   if (gps) {
     Object.assign(tags, {
       GPSLatitude: Math.abs(gps.lat),

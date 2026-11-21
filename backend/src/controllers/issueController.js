@@ -2,6 +2,7 @@ const { validationResult } = require('express-validator');
 const { Issue, statuses } = require('../models');
 const { reverseGeocode } = require('../utils/geocoding');
 const { computePHash, findSimilarImages } = require('../utils/phash');
+const { getCaptureDate, checkPhotoAge } = require('../utils/photoDate');
 const path = require('path');
 
 // EXIF + geo distance validation
@@ -31,7 +32,7 @@ const createIssue = async (req, res, next) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { title, description, latitude, longitude, status } = req.body;
+    const { title, description, latitude, longitude } = req.body;
 
     // Convert latitude and longitude to numbers if they're strings
     let lat = parseFloat(latitude);
@@ -152,64 +153,41 @@ const createIssue = async (req, res, next) => {
         }
 
         // ========== DATE VALIDATION ==========
-        // Try to get photo date from DateTimeOriginal (camera photos) or file date (gallery)
-        let photoDate = null;
-        if (exif.DateTimeOriginal) {
-          try {
-            const normalized = String(exif.DateTimeOriginal)
-              .replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3')
-              .replace(
-                /(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})/,
-                '$1-$2-$3T$4:$5:$6'
-              );
-            const parsed = new Date(normalized);
-            if (!isNaN(parsed.getTime())) {
-              photoDate = parsed;
-            }
-          } catch (e) {
-            // Fall through to FileModifyDate
-          }
-        }
+        // Only dates embedded in the photo count. Filesystem dates such as
+        // FileModifyDate are the time the server saved the upload, so they
+        // would make every photo look fresh. See utils/photoDate.js.
+        const capture = getCaptureDate(exif);
 
-        // If no DateTimeOriginal, try FileModifyDate (for gallery photos)
-        if (!photoDate && exif.FileModifyDate) {
-          try {
-            const normalized = String(exif.FileModifyDate)
-              .replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3')
-              .replace(
-                /(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})/,
-                '$1-$2-$3T$4:$5:$6'
-              );
-            const parsed = new Date(normalized);
-            if (!isNaN(parsed.getTime())) {
-              photoDate = parsed;
-            }
-          } catch (e) {
-            // Fall through
-          }
-        }
-
-        // 2. REJECT if no valid date can be found
-        if (!photoDate) {
+        // 2. REJECT if the photo carries no capture date
+        if (!capture) {
           return res.status(400).json({
             message:
               'Photo has no date metadata. Please capture a new photo or select one with date information.',
           });
         }
 
-        const ageMs = Date.now() - photoDate.getTime();
-        const maxAgeMs = 24 * 60 * 60 * 1000; // 24 hours for both camera and gallery
-
+        const age = checkPhotoAge(capture);
         console.log(
-          `   - Photo age: ${(ageMs / 1000 / 60).toFixed(0)} minutes`
+          `   - Captured (${capture.tag}${capture.zoneKnown ? '' : ', no timezone'}): ${capture.date.toISOString()}`
         );
 
-        // 3. REJECT if older than 24 hours
-        if (ageMs > maxAgeMs) {
+        // 3. REJECT if older than 24 hours or dated in the future
+        if (!age.ok && age.reason === 'stale') {
           return res.status(400).json({
             message:
               'Photo is older than 24 hours. Please capture a fresh photo or select a recent one.',
           });
+        }
+        if (!age.ok && age.reason === 'future') {
+          return res.status(400).json({
+            message:
+              "Photo's capture date is in the future. Please check your device's date and time, then capture a new photo.",
+          });
+        }
+
+        // Without a timezone the exact age cannot be confirmed; let staff check it.
+        if (age.uncertain) {
+          needs_review = true;
         }
 
         // ========== GPS VALIDATION ==========
@@ -410,7 +388,8 @@ const createIssue = async (req, res, next) => {
       latitude,
       longitude,
       address,
-      status,
+      // Every new report starts Open; only staff/admin move it on (PUT).
+      status: 'Open',
       needs_review,
       phash,
     });
