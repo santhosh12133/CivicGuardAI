@@ -143,9 +143,11 @@ jobs:
           cidr=$(aws ec2 describe-vpcs --vpc-ids "$vpc" --query 'Vpcs[0].CidrBlock' --output text)
           subnets=$(aws ec2 describe-subnets --filters Name=vpc-id,Values="$vpc" Name=default-for-az,Values=true \
             --query 'Subnets[].SubnetId' --output text | tr '\t' ',')
-          echo "VPC_ID=$vpc" >> "$GITHUB_ENV"
-          echo "VPC_CIDR=$cidr" >> "$GITHUB_ENV"
-          echo "SUBNET_IDS=$subnets" >> "$GITHUB_ENV"
+          {
+            echo "VPC_ID=$vpc"
+            echo "VPC_CIDR=$cidr"
+            echo "SUBNET_IDS=$subnets"
+          } >> "$GITHUB_ENV"
           echo "Default VPC $vpc ($cidr), subnets $subnets"
 
       - name: Deploy database, registry, secrets and admin hosting

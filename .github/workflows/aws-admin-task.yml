@@ -99,7 +99,7 @@ jobs:
             create-staff)
               password=$(openssl rand -base64 24 | tr -d '/+=' | head -c 24)
               echo "::add-mask::$password"
-              secret_name="civicfix/staff/$(echo "$EMAIL" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9@._\n-' '-')"
+              secret_name="civicfix/staff/$(echo "$EMAIL" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9@._\n-' '-')"
               payload=$(jq -cn --arg e "$EMAIL" --arg p "$password" --arg r "$ROLE" '{email:$e, password:$p, role:$r}')
               if aws secretsmanager describe-secret --secret-id "$secret_name" >/dev/null 2>&1; then
                 aws secretsmanager put-secret-value --secret-id "$secret_name" --secret-string "$payload" >/dev/null
