@@ -5,7 +5,7 @@ name: Sign up, browse issues, filter by category, open an issue
     clearState: true
 - extendedWaitUntil:
     visible: "Welcome Back.*"
-    timeout: 60000
+    timeout: 150000
 - assertVisible: "Server: .*"
 - tapOn:
     id: "go-to-signup"

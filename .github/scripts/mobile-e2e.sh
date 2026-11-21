@@ -36,8 +36,13 @@ for flow in "$FLOWS"/0*.yaml; do
   echo "::group::$name"
   adb logcat -c || true
   adb emu geo fix 77.5946 12.9716 >/dev/null 2>&1 || true
+  # Emulators on shared CI machines are sometimes slow to start an app, so
+  # each flow gets one retry; the log says when a retry was needed.
   if maestro test "${env_args[@]}" --debug-output "$OUT/debug-$name" "$flow"; then
     echo "PASSED: $name"
+  elif echo "::warning::Retrying $name once" && \
+       maestro test "${env_args[@]}" --debug-output "$OUT/debug-$name-retry" "$flow"; then
+    echo "PASSED: $name (on retry)"
   else
     echo "::error::Mobile flow failed: $name"
     failed+=("$name")

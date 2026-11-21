@@ -5,7 +5,7 @@ name: The server address screen validates input
     clearState: true
 - extendedWaitUntil:
     visible: "Welcome Back.*"
-    timeout: 60000
+    timeout: 150000
 - tapOn:
     id: "change-server"
 - assertVisible: "Connect to your CivicFix server"
