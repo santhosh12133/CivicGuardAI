@@ -229,6 +229,10 @@ cd backend
 npm ci
 cp .env.example .env
 npm run dev
+
+# Tests (integration tests wipe TEST_DATABASE_URL; see docs/testing.md)
+npm run test:unit
+TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/civicguard_test npm test
 ```
 
 ### Admin
@@ -256,6 +260,7 @@ See [Developer Guide](docs/developer-guide.md) and [Environment Reference](docs/
 The current GitHub Actions workflow:
 
 - installs backend dependencies and runs `node --check server.js`;
+- runs backend unit and integration tests against PostgreSQL (`npm test`; see [Testing Strategy](docs/testing.md));
 - installs/builds the admin portal;
 - installs mobile dependencies and validates Expo configuration.
 

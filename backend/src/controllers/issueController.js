@@ -7,8 +7,7 @@ const path = require('path');
 // EXIF + geo distance validation
 // We use exiftool to read EXIF metadata from uploaded images (if present)
 // and geolib to compute distance between EXIF GPS and device GPS.
-const { ExifTool } = require('exiftool-vendored');
-const exiftool = new ExifTool({ taskTimeoutMillis: 5000 });
+const { exiftool } = require('../utils/exiftool');
 const { getDistance } = require('geolib');
 
 const createIssue = async (req, res, next) => {

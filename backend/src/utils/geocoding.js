@@ -57,6 +57,12 @@ const reverseGeocode = async (latitude, longitude, retries = 2) => {
     throw new Error('Invalid coordinates provided');
   }
 
+  // GEOCODING_ENABLED=false skips the external provider entirely (tests,
+  // offline development, or a provider outage) and stores a coordinate label.
+  if (process.env.GEOCODING_ENABLED === 'false') {
+    return formatCoordinatesAsAddress(lat, lon);
+  }
+
   // Check cache first
   const cacheKey = getCacheKey(lat, lon);
   if (geocodingCache.has(cacheKey)) {

@@ -24,7 +24,9 @@ const storage = multer.diskStorage({
 
 const fileFilter = (_req, file, cb) => {
   if (!extensions[file.mimetype]) {
-    return cb(new Error('Only JPEG, PNG, GIF, and WebP images are allowed'));
+    const error = new Error('Only JPEG, PNG, GIF, and WebP images are allowed');
+    error.statusCode = 400;
+    return cb(error);
   }
   return cb(null, true);
 };
@@ -35,6 +37,21 @@ const upload = multer({
   fileFilter,
 });
 
+// Multer reports client mistakes (oversized file, extra files, wrong field
+// name) as MulterError without an HTTP status, which the error handler would
+// otherwise turn into a 500. Give them proper 4xx statuses here.
+const toClientError = (error) => {
+  if (!(error instanceof multer.MulterError)) return error;
+  const clientError = new Error(
+    error.code === 'LIMIT_FILE_SIZE' ? 'Image must be 10 MB or smaller' : error.message
+  );
+  clientError.statusCode = error.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+  return clientError;
+};
+
 module.exports = {
-  single: (fieldName) => upload.single(fieldName),
+  single: (fieldName) => {
+    const handler = upload.single(fieldName);
+    return (req, res, next) => handler(req, res, (error) => next(error ? toClientError(error) : undefined));
+  },
 };

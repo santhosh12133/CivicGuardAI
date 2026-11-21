@@ -218,6 +218,10 @@ Issue identifiers are validated as UUIDs before controller execution. filecit
 
 The API limits multipart uploads to one file and 10 MB and restricts accepted image MIME types. fileciteturn256file0L2-L4
 
+- A file larger than 10 MB returns `413` with `Image must be 10 MB or smaller`.
+- A file that is not JPEG, PNG, GIF, or WebP returns `400`.
+- Other multipart mistakes (more than one file, unexpected field name) return `400`.
+
 ## 6. Error model
 
 Canonical categories:
@@ -229,6 +233,7 @@ Canonical categories:
 | 403 | Authenticated but not authorized | Do not retry with same role |
 | 404 | Issue/resource not found | Refresh or report missing resource |
 | 409 | Resource conflict | Resolve duplicate/conflict |
+| 413 | Upload or request body too large | Send a smaller image (10 MB max) or body (1 MB max) |
 | 429 | Rate limited | Back off and retry later |
 | 500 | Unexpected server failure | Show generic error; inspect server logs |
 | 503 | Dependency/unavailable service | Retry using backoff after service recovery |
@@ -238,6 +243,8 @@ Production responses must not expose internal exception messages. This is an exp
 ## 7. Request limits and CORS
 
 The API configures JSON and URL-encoded body limits at 1 MB and a global process-local rate limiter. CORS is origin allow-listed in production using `CORS_ORIGINS`. fileciteturn257file0L2-L5
+
+A browser request from an origin that is not on the allow-list receives `403` (`Origin not allowed by CORS`). Requests without an `Origin` header, such as those from the mobile app or `curl`, are not affected.
 
 The rate limiter is process-local; horizontally scaled deployments require a shared limiter. fileciteturn256file0L2-L4
 

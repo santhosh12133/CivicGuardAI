@@ -20,10 +20,48 @@ Static checks
 The repository currently runs:
 
 - backend dependency installation and `node --check server.js`;
+- backend unit and integration tests (`npm test`) against a PostgreSQL 16 service container;
 - admin dependency installation and production build;
 - mobile dependency installation and `npx expo config --type public`.
 
-These checks are defined in `.github/workflows/ci.yml`. fileciteturn262file0L2-L6
+These checks are defined in `.github/workflows/ci.yml`.
+
+## Running the backend tests
+
+The backend uses Node's built-in test runner (`node:test`) and `fetch`, so there are no extra test dependencies.
+
+```bash
+cd backend
+npm run test:unit                      # no database needed
+
+# Integration tests need a DISPOSABLE database; every table is dropped and recreated.
+docker run --rm -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=civicguard_test postgres:16
+TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/civicguard_test npm test
+```
+
+Integration tests read `TEST_DATABASE_URL` only, never `DATABASE_URL`, so a developer's `.env` database cannot be wiped by accident. They set `GEOCODING_ENABLED=false` so no request reaches Nominatim.
+
+| Suite | File | Covers |
+|---|---|---|
+| Unit | `test/unit/rateLimiter.test.js` | limit, 429 + `Retry-After`, per-IP buckets, window reset |
+| Unit | `test/unit/errorHandler.test.js` | 5xx message hiding in production, 4xx passthrough |
+| Unit | `test/unit/authMiddleware.test.js` | valid/missing/expired/forged/`alg=none` tokens, role checks |
+| Unit | `test/unit/phash.test.js` | Hamming distance, similarity threshold, hashing the fixtures |
+| Integration | `test/integration/app.test.js` | health, security headers, CORS allow/deny, body limits |
+| Integration | `test/integration/auth.test.js` | registration, privileged-role rejection, login, user listing by role |
+| Integration | `test/integration/issues.test.js` | issue CRUD, validation boundaries, citizen/staff/admin/anonymous access |
+| Integration | `test/integration/evidence.test.js` | EXIF presence, 24 h photo age, 200 m GPS check in all hemispheres, pHash duplicates, upload limits, resolution photos |
+
+Evidence tests stamp the fixture images in `test/fixtures/` with EXIF dates and GPS at run time using ExifTool, so photo age is always relative to the current clock.
+
+### Known gaps recorded as TODO tests
+
+Tests marked `todo` describe behavior that should change. They run and report, but do not fail the build:
+
+- New issues accept `status` from any role, so a citizen can file an issue that is already `Resolved`.
+- A photo without `DateTimeOriginal` falls back to `FileModifyDate`, which is the server upload time, so the 24-hour rule is bypassed.
+- Photos dated in the future are accepted.
+- Rejected uploads remain in `uploads/` and are publicly served.
 
 ## Backend test priorities
 
