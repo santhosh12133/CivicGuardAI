@@ -1,6 +1,7 @@
 import React from "react";
 import { getApiBaseUrl } from "../utils/api";
-import { StyleSheet } from "react-native";
+import { useCategories, categoryLabel, CATEGORY_ICONS } from "../utils/categories";
+import { StyleSheet, View } from "react-native";
 import { Card, Text, Chip } from "react-native-paper";
 
 const STATUS_COLORS = {
@@ -10,6 +11,7 @@ const STATUS_COLORS = {
 };
 
 const IssueCard = ({ issue, onPress }) => {
+  const categories = useCategories();
   const statusColor = STATUS_COLORS[issue.status] || "#64748b";
   const normalizeUrl = (url) => {
     if (!url) return url;
@@ -47,12 +49,22 @@ const IssueCard = ({ issue, onPress }) => {
         <Text variant="bodyMedium" style={styles.description} numberOfLines={2}>
           {issue.description}
         </Text>
-        <Chip
-          style={[styles.statusChip, { backgroundColor: `${statusColor}22` }]}
-          textStyle={{ color: statusColor }}
-        >
-          {issue.status}
-        </Chip>
+        <View style={styles.chipRow}>
+          <Chip
+            style={[styles.statusChip, { backgroundColor: `${statusColor}22` }]}
+            textStyle={{ color: statusColor }}
+          >
+            {issue.status}
+          </Chip>
+          <Chip icon={CATEGORY_ICONS[issue.category] || CATEGORY_ICONS.other} style={styles.categoryChip} compact>
+            {categoryLabel(categories, issue.category)}
+          </Chip>
+          {issue.is_mine && (
+            <Chip style={styles.mineChip} textStyle={styles.mineText} compact>
+              Your report
+            </Chip>
+          )}
+        </View>
         {issue.address ? (
           <Text variant="bodySmall" style={styles.meta}>
             📍 {issue.address}
@@ -93,6 +105,20 @@ const styles = StyleSheet.create({
   },
   statusChip: {
     alignSelf: "flex-start",
+  },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  categoryChip: {
+    backgroundColor: "#f1f5f9",
+  },
+  mineChip: {
+    backgroundColor: "#dbeafe",
+  },
+  mineText: {
+    color: "#1d4ed8",
   },
   meta: {
     color: "#94a3b8",

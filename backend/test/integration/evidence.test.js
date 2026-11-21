@@ -33,7 +33,7 @@ before(async () => {
 });
 after(async () => { await api.close(); });
 // Each test starts with no stored photos, so duplicate detection is predictable.
-beforeEach(async () => { await Issue.destroy({ where: {}, truncate: true }); });
+beforeEach(async () => { await Issue.destroy({ where: {}, truncate: true, cascade: true }); });
 
 const report = (photoOpts, at, formOpts = {}) => async () => {
   const photo = await makePhoto(photoOpts);

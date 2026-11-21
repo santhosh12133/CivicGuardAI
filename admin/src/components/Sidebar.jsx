@@ -11,33 +11,34 @@ import {
   Divider,
 } from '@mui/material';
 import {
-  Dashboard as DashboardIcon,
+  Insights as OverviewIcon,
+  ListAlt as IssuesIcon,
+  Group as StaffIcon,
   Logout as LogoutIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const drawerWidth = 250;
 
-const Sidebar = () => {
+const Sidebar = ({ user }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
   const handleLogout = () => {
     localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_user');
     navigate('/login');
   };
 
+  const isActive = (path) =>
+    path === '/' ? location.pathname === '/' : location.pathname.startsWith(path) ||
+      (path === '/issues' && location.pathname.startsWith('/issue/'));
+
   const menuItems = [
-    {
-      text: 'Dashboard',
-      icon: <DashboardIcon />,
-      path: '/',
-    },
-    {
-      text: 'Logout',
-      icon: <LogoutIcon />,
-      action: handleLogout,
-    },
+    { text: 'Overview', icon: <OverviewIcon />, path: '/' },
+    { text: 'Issues', icon: <IssuesIcon />, path: '/issues' },
+    ...(user?.role === 'admin' ? [{ text: 'Staff', icon: <StaffIcon />, path: '/staff' }] : []),
+    { text: 'Logout', icon: <LogoutIcon />, action: handleLogout },
   ];
 
   return (
@@ -59,33 +60,28 @@ const Sidebar = () => {
         </Typography>
       </Toolbar>
       <Divider />
-      <List>
-        {menuItems.map((item) => (
-          <ListItem key={item.text} disablePadding>
-            <ListItemButton
-              onClick={item.action || (() => navigate(item.path))}
-              selected={location.pathname === item.path}
-              sx={{
-                '&.Mui-selected': {
-                  backgroundColor: 'primary.main',
-                  color: 'white',
-                  '&:hover': {
-                    backgroundColor: 'primary.dark',
-                  },
-                },
-              }}
-            >
-              <ListItemIcon
+      <List component="nav" aria-label="Main">
+        {menuItems.map((item) => {
+          const selected = item.path ? isActive(item.path) : false;
+          return (
+            <ListItem key={item.text} disablePadding>
+              <ListItemButton
+                onClick={item.action || (() => navigate(item.path))}
+                selected={selected}
                 sx={{
-                  color: location.pathname === item.path ? 'white' : 'inherit',
+                  '&.Mui-selected': {
+                    backgroundColor: 'primary.main',
+                    color: 'white',
+                    '&:hover': { backgroundColor: 'primary.dark' },
+                  },
                 }}
               >
-                {item.icon}
-              </ListItemIcon>
-              <ListItemText primary={item.text} />
-            </ListItemButton>
-          </ListItem>
-        ))}
+                <ListItemIcon sx={{ color: selected ? 'white' : 'inherit' }}>{item.icon}</ListItemIcon>
+                <ListItemText primary={item.text} />
+              </ListItemButton>
+            </ListItem>
+          );
+        })}
       </List>
     </Drawer>
   );

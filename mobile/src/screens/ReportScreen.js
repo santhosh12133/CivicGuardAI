@@ -1,11 +1,12 @@
 import React, { useState } from "react";
 import { View, StyleSheet, Image, ScrollView, Platform, Linking } from "react-native";
-import { Button, TextInput, Text, Snackbar, HelperText } from "react-native-paper";
+import { Button, TextInput, Text, Snackbar, HelperText, Chip } from "react-native-paper";
 import MapView, { Marker } from "react-native-maps";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
+import { useCategories, CATEGORY_ICONS } from "../utils/categories";
 
 // Google Maps on Android needs an API key baked into the build; rendering
 // MapView without one crashes the app. Without a key, show a link instead.
@@ -19,6 +20,8 @@ const ReportScreen = ({ navigation }) => {
   const { token } = useAuth();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [category, setCategory] = useState(null);
+  const categories = useCategories();
   const [photo, setPhoto] = useState(null);
   const [coords, setCoords] = useState(null);
   const [address, setAddress] = useState(null);
@@ -78,6 +81,10 @@ const ReportScreen = ({ navigation }) => {
   const handleSubmit = async () => {
     const cleanTitle = title.trim();
     const cleanDescription = description.trim();
+    if (!category) {
+      setError("Please choose what kind of problem this is");
+      return;
+    }
     if (!cleanTitle || !cleanDescription) {
       setError("Please provide a title and description");
       return;
@@ -97,6 +104,7 @@ const ReportScreen = ({ navigation }) => {
       const formData = new FormData();
       formData.append("title", cleanTitle);
       formData.append("description", cleanDescription);
+      formData.append("category", category);
       formData.append("latitude", String(locationCoords.latitude));
       formData.append("longitude", String(locationCoords.longitude));
 
@@ -115,6 +123,7 @@ const ReportScreen = ({ navigation }) => {
       setUploadStatus("");
       setTitle("");
       setDescription("");
+      setCategory(null);
       setPhoto(null);
       setAddress(issueData?.address || null);
 
@@ -139,6 +148,20 @@ const ReportScreen = ({ navigation }) => {
           <Button mode="outlined" onPress={() => handlePickImage("gallery")} style={styles.photoButton} icon="image">Gallery</Button>
         </View>
         {permissionError && <Text style={styles.permissionError}>{permissionError}</Text>}
+      </View>
+      <Text variant="titleSmall" style={styles.categoryLabel}>What kind of problem is it?</Text>
+      <View style={styles.categoryGrid}>
+        {categories.map((item) => (
+          <Chip
+            key={item.id}
+            icon={CATEGORY_ICONS[item.id]}
+            selected={category === item.id}
+            onPress={() => setCategory(item.id)}
+            style={[styles.categoryChip, category === item.id && styles.categoryChipSelected]}
+          >
+            {item.label}
+          </Chip>
+        ))}
       </View>
       <TextInput label="Title" value={title} onChangeText={setTitle} mode="outlined" style={styles.input} maxLength={120} />
       <TextInput label="Description" value={description} onChangeText={setDescription} multiline numberOfLines={4} mode="outlined" style={[styles.input, styles.description]} maxLength={2000} />
@@ -167,6 +190,10 @@ const styles = StyleSheet.create({
   buttonGroup: { flexDirection: "row", justifyContent: "space-around", width: "100%" },
   permissionError: { color: "#ef4444", fontSize: 14, marginTop: 8, textAlign: "center" },
   input: { marginBottom: 16 },
+  categoryLabel: { marginBottom: 8, fontWeight: "600" },
+  categoryGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
+  categoryChip: { backgroundColor: "#f1f5f9" },
+  categoryChipSelected: { backgroundColor: "#dbeafe" },
   description: { minHeight: 120 },
   submitButton: { marginTop: 8 },
   locationSection: { marginBottom: 16, padding: 12, backgroundColor: "#f1f5f9", borderRadius: 8 },

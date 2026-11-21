@@ -40,11 +40,28 @@ export const adminAuth = {
   },
 };
 
+export const authAPI = {
+  me: async () => (await api.get("/auth/me")).data.user,
+  changePassword: async (currentPassword, newPassword) =>
+    (await api.post("/auth/change-password", { currentPassword, newPassword })).data,
+};
+
+export const usersAPI = {
+  listStaff: async () => (await api.get("/auth/users", { params: { role: "staff,admin" } })).data.users,
+  createStaff: async ({ name, email, role }) => (await api.post("/auth/staff", { name, email, role })).data,
+  updateRole: async (id, role) => (await api.patch(`/auth/users/${id}`, { role })).data.user,
+  resetPassword: async (id) => (await api.post(`/auth/users/${id}/reset-password`)).data,
+};
+
 export const issuesAPI = {
-  getAll: async () => {
-    const response = await api.get("/issues");
+  getAll: async (params = {}) => {
+    const response = await api.get("/issues", { params });
     return response.data;
   },
+  categories: async () => (await api.get("/issues/categories")).data,
+  stats: async () => (await api.get("/issues/stats")).data,
+  // Any of { status, category, note }; a note alone is allowed.
+  update: async (id, changes) => (await api.put(`/issues/${id}`, changes)).data,
   getById: async (id) => {
     const response = await api.get(`/issues/${id}`);
     return response.data;

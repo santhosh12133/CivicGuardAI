@@ -7,7 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import LoginScreen from "../screens/LoginScreen";
 import SignupScreen from "../screens/SignupScreen";
 import ServerScreen from "../screens/ServerScreen";
-import HomeScreen from "../screens/HomeScreen";
+import HomeScreen, { MyReportsScreen } from "../screens/HomeScreen";
 import ReportScreen from "../screens/ReportScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import IssueDetailScreen from "../screens/IssueDetailScreen";
@@ -37,6 +37,16 @@ const MainTabs = () => (
           <Ionicons name="home" color={color} size={size} />
         ),
         title: "Home",
+      }}
+    />
+    <Tab.Screen
+      name="MyReports"
+      component={MyReportsScreen}
+      options={{
+        tabBarIcon: ({ color, size }) => (
+          <Ionicons name="document-text" color={color} size={size} />
+        ),
+        title: "My Reports",
       }}
     />
     <Tab.Screen

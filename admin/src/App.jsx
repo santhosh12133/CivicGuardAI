@@ -1,38 +1,54 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Box } from '@mui/material';
 import Login from './pages/Login';
+import Overview from './pages/Overview';
 import Dashboard from './pages/Dashboard';
 import IssueDetails from './pages/IssueDetails';
+import Staff from './pages/Staff';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
+import { authAPI } from './api/api';
+import { currentUser } from './categories';
 
-const ProtectedLayout = ({ children }) => {
+const clearSession = () => {
+  localStorage.removeItem('admin_token');
+  localStorage.removeItem('admin_user');
+};
+
+const ProtectedLayout = ({ children, adminOnly = false }) => {
   const location = useLocation();
   const token = localStorage.getItem('admin_token');
-  const storedUser = localStorage.getItem('admin_user');
+  const [user, setUser] = useState(currentUser);
 
-  let user = null;
-  try {
-    user = storedUser ? JSON.parse(storedUser) : null;
-  } catch {
-    localStorage.removeItem('admin_user');
-  }
+  // Re-check the account with the server so a role change applies at once.
+  useEffect(() => {
+    if (!token) return;
+    authAPI
+      .me()
+      .then((fresh) => {
+        localStorage.setItem('admin_user', JSON.stringify(fresh));
+        setUser(fresh);
+      })
+      .catch(() => {});
+  }, [token, location.pathname]);
 
   const hasStaffAccess = ['staff', 'admin'].includes(user?.role);
 
   if (!token || !hasStaffAccess) {
-    localStorage.removeItem('admin_token');
-    localStorage.removeItem('admin_user');
+    clearSession();
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+  if (adminOnly && user.role !== 'admin') {
+    return <Navigate to="/" replace />;
   }
 
   return (
     <Box sx={{ display: 'flex', height: '100vh' }}>
-      <Sidebar />
-      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
-        <Topbar />
-        <Box sx={{ flexGrow: 1, overflow: 'auto', backgroundColor: '#f8f9fa' }}>
+      <Sidebar user={user} />
+      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <Topbar user={user} />
+        <Box component="main" sx={{ flexGrow: 1, overflow: 'auto', backgroundColor: '#f8f9fa' }}>
           {children}
         </Box>
       </Box>
@@ -40,15 +56,15 @@ const ProtectedLayout = ({ children }) => {
   );
 };
 
-const ProtectedRoute = ({ element }) => <ProtectedLayout>{element}</ProtectedLayout>;
-
 function App() {
   return (
     <Router>
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/" element={<ProtectedRoute element={<Dashboard />} />} />
-        <Route path="/issue/:id" element={<ProtectedRoute element={<IssueDetails />} />} />
+        <Route path="/" element={<ProtectedLayout><Overview /></ProtectedLayout>} />
+        <Route path="/issues" element={<ProtectedLayout><Dashboard /></ProtectedLayout>} />
+        <Route path="/issue/:id" element={<ProtectedLayout><IssueDetails /></ProtectedLayout>} />
+        <Route path="/staff" element={<ProtectedLayout adminOnly><Staff /></ProtectedLayout>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>

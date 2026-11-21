@@ -17,6 +17,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import IssueCard from "../components/IssueCard";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
+import { useCategories, CATEGORY_ICONS } from "../utils/categories";
 
 const STATUS_COLORS = {
   Open: "#f97316",
@@ -24,8 +25,12 @@ const STATUS_COLORS = {
   Resolved: "#22c55e",
 };
 
-const HomeScreen = ({ navigation }) => {
+// Lists all reports, or with `mine` only the signed-in citizen's own
+// ("My Reports" tab).
+const HomeScreen = ({ navigation, mine = false }) => {
   const { user } = useAuth();
+  const categories = useCategories();
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const [issues, setIssues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -39,7 +44,7 @@ const HomeScreen = ({ navigation }) => {
         setLoading(true);
       }
       setError(null);
-      const { data } = await api.get("/api/issues");
+      const { data } = await api.get("/api/issues", { params: mine ? { mine: "true" } : {} });
       setIssues(data);
     } catch (err) {
       setError(err.message);
@@ -66,7 +71,10 @@ const HomeScreen = ({ navigation }) => {
 
     // Apply filter
     if (selectedFilter !== "All") {
-      filtered = issues.filter((issue) => issue.status === selectedFilter);
+      filtered = filtered.filter((issue) => issue.status === selectedFilter);
+    }
+    if (categoryFilter !== "all") {
+      filtered = filtered.filter((issue) => (issue.category || "other") === categoryFilter);
     }
 
     // Apply sorting
@@ -91,7 +99,7 @@ const HomeScreen = ({ navigation }) => {
     });
 
     return sorted;
-  }, [issues, selectedFilter, sortBy]);
+  }, [issues, selectedFilter, categoryFilter, sortBy]);
 
   if (loading && !refreshing && !issues.length) {
     return (
@@ -107,10 +115,12 @@ const HomeScreen = ({ navigation }) => {
       <View style={styles.header}>
         <View>
           <Text variant="headlineSmall" style={styles.greeting}>
-            Hello, {user?.name?.split(" ")[0] || "there"}
+            {mine ? "My reports" : `Hello, ${user?.name?.split(" ")[0] || "there"}`}
           </Text>
           <Text variant="bodyMedium" style={styles.caption}>
-            Here’s what’s happening around your community today.
+            {mine
+              ? `${issues.length} report${issues.length === 1 ? "" : "s"} you have made. Tap one to follow its progress.`
+              : "Here’s what’s happening around your community today."}
           </Text>
         </View>
         <IconButton
@@ -151,6 +161,24 @@ const HomeScreen = ({ navigation }) => {
               }}
             >
               {status}
+            </Chip>
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* Category filter */}
+      <View style={styles.filterContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
+          {[{ id: "all", label: "All categories" }, ...categories].map((category) => (
+            <Chip
+              key={category.id}
+              icon={category.id === "all" ? "shape-outline" : CATEGORY_ICONS[category.id]}
+              selected={categoryFilter === category.id}
+              onPress={() => setCategoryFilter(category.id)}
+              style={[styles.filterChip, categoryFilter === category.id && styles.categoryChipSelected]}
+              compact
+            >
+              {category.label}
             </Chip>
           ))}
         </ScrollView>
@@ -206,15 +234,22 @@ const HomeScreen = ({ navigation }) => {
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Text variant="titleMedium">
-                {selectedFilter === "All"
-                  ? "No issues reported yet."
-                  : `No ${selectedFilter.toLowerCase()} issues found.`}
+                {selectedFilter !== "All" || categoryFilter !== "all"
+                  ? "No reports match these filters."
+                  : mine
+                  ? "You haven't reported anything yet."
+                  : "No issues reported yet."}
               </Text>
               <Text variant="bodyMedium" style={styles.caption}>
-                {selectedFilter === "All"
-                  ? "Be the first to highlight an issue in your area."
-                  : "Try selecting a different filter."}
+                {selectedFilter !== "All" || categoryFilter !== "all"
+                  ? "Try selecting a different filter."
+                  : "Be the first to highlight an issue in your area."}
               </Text>
+              {mine && selectedFilter === "All" && categoryFilter === "all" && (
+                <Button mode="contained" style={styles.emptyButton} onPress={() => navigation.navigate("Report")}>
+                  Report an issue
+                </Button>
+              )}
             </View>
           }
         />
@@ -224,6 +259,12 @@ const HomeScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
+  categoryChipSelected: {
+    backgroundColor: "#dbeafe",
+  },
+  emptyButton: {
+    marginTop: 16,
+  },
   container: {
     flex: 1,
     backgroundColor: "#f8fafc",
@@ -309,3 +350,5 @@ const styles = StyleSheet.create({
 });
 
 export default HomeScreen;
+
+export const MyReportsScreen = (props) => <HomeScreen {...props} mine />;
