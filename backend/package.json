@@ -15,7 +15,8 @@
     "fix-address": "node scripts/fix-address-column.js",
     "fix-needs-review": "node scripts/add-needs-review-column.js",
     "add-phash": "node scripts/add-phash-column.js",
-    "prune-uploads": "node scripts/prune-orphan-uploads.js"
+    "prune-uploads": "node scripts/prune-orphan-uploads.js",
+    "create-staff": "node scripts/create-staff-user.js"
   },
   "keywords": [],
   "author": "",

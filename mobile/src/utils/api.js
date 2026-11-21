@@ -18,9 +18,12 @@ export const API_BASE_URL = (
 
 console.log("Using backend at:", API_BASE_URL);
 
+// Free hosting (e.g. Render) puts the API to sleep after 15 idle minutes and
+// the first request can take close to a minute while it wakes up. Photo
+// uploads also run EXIF and duplicate checks, so allow plenty of time.
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 90000,
   headers: {
     Accept: "application/json",
   },
@@ -41,6 +44,13 @@ api.interceptors.request.use((config) => {
   }
 })();
 
+// AuthContext registers a callback here so an expired or revoked token logs
+// the user out instead of leaving every request failing with 401.
+let unauthorizedHandler = null;
+export const setUnauthorizedHandler = (handler) => {
+  unauthorizedHandler = handler;
+};
+
 export const setAuthToken = (token) => {
   if (token) {
     api.defaults.headers.common.Authorization = `Bearer ${token}`;
@@ -55,7 +65,9 @@ api.interceptors.response.use(
     if (!error.response) {
       if (error.code === "ECONNABORTED") {
         return Promise.reject(
-          new Error("Request timeout. The server may be slow or unreachable.")
+          new Error(
+            "The server took too long to respond. It may have been asleep; please try again in a moment."
+          )
         );
       }
       if (error.message === "Network Error" || error.code === "ERR_NETWORK") {
@@ -72,6 +84,11 @@ api.interceptors.response.use(
     const { data, status } = error.response;
 
     if (status === 401) {
+      const sentToken = Boolean(error.config?.headers?.Authorization);
+      if (sentToken && unauthorizedHandler) {
+        unauthorizedHandler();
+        return Promise.reject(new Error("Your session has expired. Please log in again."));
+      }
       return Promise.reject(new Error(data?.message || "Authentication failed"));
     }
 

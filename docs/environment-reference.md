@@ -9,9 +9,11 @@ This file is the operational contract for configuration. Real secrets must never
 | `NODE_ENV` | Production: yes | `production` | No | Selects production behavior |
 | `PORT` | No | `5000` | No | HTTP listener port |
 | `DATABASE_URL` | Yes | `postgres://...` | Yes | PostgreSQL connection string |
+| `DATABASE_SSL` | External DBs | `true` | No | Use TLS for the database connection. Needed for Render's *external* URL, Neon, Supabase, etc. Also enabled by `sslmode=require` in the URL |
+| `DATABASE_SSL_REJECT_UNAUTHORIZED` | No | `false` | No | Set to `false` only if the provider's certificate is not trusted by Node |
 | `JWT_SECRET` | Yes | random 64+ char value | Yes | JWT signing/verification secret |
-| `CORS_ORIGINS` | Production: yes | `https://admin.example.com` | No | Comma-separated browser origin allow-list |
-| `API_HOST` | Recommended | `api.example.com` | No | Host used when constructing image URLs |
+| `CORS_ORIGINS` | Production: yes | `https://admin.example.com` | No | Comma-separated browser origin allow-list. If empty in production the API still starts (the mobile app sends no `Origin`) but refuses every browser origin |
+| `API_HOST` | No | `api.example.com` | No | Host used in photo URLs. Leave unset on Render (the request's public host is used); set it for a custom API domain |
 | `API_PROTOCOL` | Production: yes | `https` | No | URL scheme used for generated URLs |
 | `GEOCODING_ENABLED` | No | `true` | No | Set to `false` to skip the Nominatim reverse-geocoding call and store a `Location (lat, lon)` label instead. Used by the test suite; also useful offline or during a provider outage |
 | `TEST_DATABASE_URL` | Tests only | `postgres://postgres:postgres@localhost:5432/civicguard_test` | Yes | Disposable database for `npm test`. Integration tests drop and recreate every table, so never point this at real data |
@@ -19,7 +21,7 @@ This file is the operational contract for configuration. Real secrets must never
 
 The current example file documents these variables and explicitly warns against committing real database credentials. fileciteturn260file0L2-L6
 
-The API startup requires a JWT secret of at least 32 characters and requires `CORS_ORIGINS` in production. fileciteturn257file0L2-L5
+The API startup requires a JWT secret of at least 32 characters. Without `CORS_ORIGINS` in production it logs a warning and blocks all browser origins.
 
 ## Admin variables
 
@@ -38,6 +40,8 @@ Expected Expo client configuration:
 | Variable | Example | Sensitive | Purpose |
 |---|---|---|---|
 | `EXPO_PUBLIC_API_URL` | `https://api.example.com` | No | Backend root URL embedded into the mobile build |
+| `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` | Google Maps Android key | No (restrict it to the app's package + signing certificate) | Optional. Enables the map on the report screen; without it the app shows an "Open in Maps" link instead of crashing |
+| `ANDROID_VERSION_CODE` | `42` | No | Build number; must increase for every APK you distribute. The APK workflow uses the GitHub run number |
 
 Do not place secrets in `EXPO_PUBLIC_*` variables. The deployment guide requires the mobile value to omit `/api` because the client adds API paths itself. fileciteturn255file0L2-L2
 

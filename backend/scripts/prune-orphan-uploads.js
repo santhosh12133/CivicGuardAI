@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Lists (or deletes) uploaded photos that no issue references, such as photos
-// from rejected reports that older versions of the API left in uploads/.
+// Lists (or deletes) uploaded photos that no issue references, in uploads/ and
+// in the photos table, such as photos from rejected reports that older
+// versions of the API left behind.
 //
 //   npm run prune-uploads            # dry run: list what would be deleted
 //   npm run prune-uploads -- --delete
@@ -14,16 +15,18 @@ const { sequelize } = require('../src/config/db');
 
 const main = async () => {
   const dryRun = !process.argv.includes('--delete');
-  const { orphans, deleted, kept } = await pruneOrphanUploads({ dryRun });
+  const { orphans, deleted, kept, orphanRows, deletedRows } = await pruneOrphanUploads({ dryRun });
 
-  console.log(`Referenced uploads kept: ${kept}`);
-  console.log(`Unreferenced uploads found: ${orphans.length}`);
+  console.log(`Referenced files in uploads/ kept: ${kept}`);
+  console.log(`Unreferenced files in uploads/: ${orphans.length}`);
   for (const name of orphans) console.log(`  ${name}`);
+  console.log(`Unreferenced photos in the database: ${orphanRows.length}`);
+  for (const name of orphanRows) console.log(`  ${name}`);
 
   if (dryRun) {
-    if (orphans.length) console.log('\nDry run only. Re-run with --delete to remove them.');
+    if (orphans.length || orphanRows.length) console.log('\nDry run only. Re-run with --delete to remove them.');
   } else {
-    console.log(`Deleted: ${deleted.length}`);
+    console.log(`Deleted files: ${deleted.length}, deleted database photos: ${deletedRows.length}`);
   }
 };
 

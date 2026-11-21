@@ -1,9 +1,9 @@
 const multer = require('multer');
-const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 
-const uploadsDir = path.join(__dirname, '../../uploads');
+const { UPLOADS_DIR: uploadsDir, deletePhotos } = require('../utils/photoStore');
+
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
 const extensions = {
@@ -51,16 +51,15 @@ const toClientError = (error) => {
 
 // Multer saves the file before the controller validates it. If the request
 // then fails (bad fields, rejected evidence, missing issue, server error),
-// remove the file so rejected photos are not kept or served from /uploads.
+// remove the file, and any copy already saved to the photos table, so
+// rejected photos are not kept or served from /uploads.
 const discardFileOnFailure = (req, res) => {
-  if (!req.file || !req.file.path) return;
-  const filePath = req.file.path;
+  if (!req.file || !req.file.filename) return;
+  const { filename } = req.file;
   res.on('finish', () => {
     if (res.statusCode < 400) return;
-    fs.unlink(filePath, (error) => {
-      if (error && error.code !== 'ENOENT') {
-        console.warn('Could not remove rejected upload:', path.basename(filePath), error.code);
-      }
+    deletePhotos(filename).catch((error) => {
+      console.warn('Could not remove rejected upload:', filename, error.code || error.message);
     });
   });
 };

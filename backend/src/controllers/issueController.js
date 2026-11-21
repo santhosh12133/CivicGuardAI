@@ -3,6 +3,7 @@ const { Issue, statuses } = require('../models');
 const { reverseGeocode } = require('../utils/geocoding');
 const { computePHash, findSimilarImages } = require('../utils/phash');
 const { getCaptureDate, checkPhotoAge } = require('../utils/photoDate');
+const { savePhoto, deletePhotos } = require('../utils/photoStore');
 const path = require('path');
 
 // EXIF + geo distance validation
@@ -381,6 +382,12 @@ const createIssue = async (req, res, next) => {
     }
     // ====================================================================
 
+    // Persist the photo before the issue, so a stored photo_url always resolves.
+    // If anything below fails, the upload middleware removes it again.
+    if (req.file) {
+      await savePhoto(req.file);
+    }
+
     const issue = await Issue.create({
       title,
       description,
@@ -503,7 +510,22 @@ const updateIssue = async (req, res, next) => {
       return res.status(400).json({ message: 'Invalid status provided' });
     }
 
+    // Photos this update replaces; removed once the update has succeeded.
+    const replacedPhotos = ['photo_url', 'resolved_photo_url']
+      .filter((field) => updates[field] !== undefined && issue[field] && updates[field] !== issue[field])
+      .map((field) => issue[field]);
+
+    if (req.file) {
+      await savePhoto(req.file);
+    }
+
     await issue.update(updates);
+
+    if (replacedPhotos.length) {
+      deletePhotos(...replacedPhotos).catch((error) =>
+        console.warn('Could not remove replaced photo:', error.message)
+      );
+    }
     return res.json(issue);
   } catch (error) {
     return next(error);
@@ -518,11 +540,17 @@ const deleteIssue = async (req, res, next) => {
     }
 
     const { id } = req.params;
-    const deleted = await Issue.destroy({ where: { id } });
+    const issue = await Issue.findByPk(id);
 
-    if (!deleted) {
+    if (!issue) {
       return res.status(404).json({ message: 'Issue not found' });
     }
+
+    await issue.destroy();
+    // The issue's photos are no longer reachable from anywhere; free the space.
+    await deletePhotos(issue.photo_url, issue.resolved_photo_url).catch((error) =>
+      console.warn('Could not remove photos of deleted issue:', error.message)
+    );
 
     return res.status(204).send();
   } catch (error) {

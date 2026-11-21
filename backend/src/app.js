@@ -1,11 +1,11 @@
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 const authRoutes = require('./routes/authRoutes');
 const issueRoutes = require('./routes/issueRoutes');
 const errorHandler = require('./middleware/errorHandler');
 const { createRateLimiter } = require('./middleware/rateLimiter');
 const { sequelize } = require('./config/db');
+const { UPLOADS_DIR, UPLOAD_NAME, findPhoto } = require('./utils/photoStore');
 
 // Builds the Express application without opening a port or touching the
 // database schema, so it can be started by server.js or by the test suite.
@@ -49,7 +49,27 @@ const createApp = () => {
     message: 'Too many requests. Please try again later.',
   }));
 
-  app.use('/uploads', express.static(path.join(__dirname, '../uploads'), { index: false, dotfiles: 'deny', maxAge: isProduction ? '1d' : 0 }));
+  // Evidence photos. The photos table is the durable copy (local files vanish
+  // on restart/redeploy on hosts like Render's free tier). Files that exist
+  // only on disk, from before photos were stored in the database, are still
+  // served from the local folder.
+  app.get('/uploads/:name', async (req, res, next) => {
+    const { name } = req.params;
+    if (!UPLOAD_NAME.test(name)) return res.status(404).json({ message: 'Photo not found' });
+    res.set('Cache-Control', isProduction ? 'public, max-age=86400' : 'no-cache');
+    try {
+      const photo = await findPhoto(name);
+      if (photo) {
+        res.type(photo.mime_type);
+        return res.send(photo.data);
+      }
+    } catch (error) {
+      return next(error);
+    }
+    return res.sendFile(name, { root: UPLOADS_DIR, dotfiles: 'deny' }, (error) => {
+      if (error && !res.headersSent) res.status(404).json({ message: 'Photo not found' });
+    });
+  });
   app.get('/', (req, res) => res.json({ service: 'CivicFix API', status: 'ok' }));
   app.get('/health', async (req, res) => {
     try {

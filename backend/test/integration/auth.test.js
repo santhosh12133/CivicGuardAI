@@ -1,6 +1,8 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const jwt = require('jsonwebtoken');
+const path = require('path');
+const { spawnSync } = require('child_process');
 const { startTestServer } = require('../helpers/server');
 
 let api;
@@ -119,4 +121,49 @@ test('an expired token is rejected', async () => {
   );
   const res = await api.request('GET', '/api/auth/users', { token: expired });
   assert.equal(res.status, 401);
+});
+
+// ---------- scripts/create-staff-user.js ----------
+
+const runCreateStaff = (args, env = {}) =>
+  spawnSync(process.execPath, [path.join(__dirname, '..', '..', 'scripts', 'create-staff-user.js'), ...args], {
+    env: { ...process.env, DATABASE_URL: process.env.TEST_DATABASE_URL, STAFF_PASSWORD: '', ...env },
+    encoding: 'utf8',
+  });
+
+test('create-staff creates an admin with a generated password that can log in', async () => {
+  const email = 'chief@city.example.test';
+  const result = runCreateStaff(['--email', email, '--name', 'Chief Officer', '--role', 'admin']);
+  assert.equal(result.status, 0, result.stderr);
+
+  const password = result.stdout.match(/Password \(shown once.*\): (\S+)/)?.[1];
+  assert.ok(password && password.length >= 20, `no password in output:\n${result.stdout}`);
+
+  const login = await api.request('POST', '/api/auth/login', { json: { email, password } });
+  assert.equal(login.status, 200);
+  assert.equal(login.body.user.role, 'admin');
+});
+
+test('create-staff uses STAFF_PASSWORD and updates an existing account', async () => {
+  const email = 'officer@city.example.test';
+  const first = runCreateStaff(['--email', email, '--name', 'Officer', '--role', 'staff'], { STAFF_PASSWORD: 'first-password-123' });
+  assert.equal(first.status, 0, first.stderr);
+  assert.doesNotMatch(first.stdout, /first-password-123/, 'a chosen password is never printed');
+
+  const second = runCreateStaff(['--email', email, '--name', 'Officer', '--role', 'admin'], { STAFF_PASSWORD: 'second-password-456' });
+  assert.equal(second.status, 0, second.stderr);
+
+  const oldLogin = await api.request('POST', '/api/auth/login', { json: { email, password: 'first-password-123' } });
+  assert.equal(oldLogin.status, 401);
+  const newLogin = await api.request('POST', '/api/auth/login', { json: { email, password: 'second-password-456' } });
+  assert.equal(newLogin.status, 200);
+  assert.equal(newLogin.body.user.role, 'admin');
+});
+
+test('create-staff refuses citizen accounts and short passwords', () => {
+  assert.notEqual(runCreateStaff(['--email', 'x@example.test', '--name', 'X', '--role', 'citizen']).status, 0);
+  assert.notEqual(
+    runCreateStaff(['--email', 'x@example.test', '--name', 'X', '--role', 'staff'], { STAFF_PASSWORD: 'short' }).status,
+    0
+  );
 });

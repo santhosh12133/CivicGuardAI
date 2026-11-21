@@ -26,6 +26,14 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  // Only admins may delete issues (the API returns 403 for staff).
+  const isAdmin = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("admin_user") || "null")?.role === "admin";
+    } catch {
+      return false;
+    }
+  })();
 
   useEffect(() => {
     fetchIssues();
@@ -192,6 +200,7 @@ const Dashboard = () => {
           >
             View
           </Button>
+          {isAdmin && (
           <Button
             variant="outlined"
             color="error"
@@ -224,6 +233,7 @@ const Dashboard = () => {
           >
             Delete
           </Button>
+          )}
         </Box>
       ),
     },

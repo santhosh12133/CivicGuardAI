@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import api, { setAuthToken } from '../utils/api';
+import api, { setAuthToken, setUnauthorizedHandler } from '../utils/api';
 
 const TOKEN_KEY = '@civicfix/token';
 const USER_KEY = '@civicfix/user';
@@ -74,6 +74,15 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     await clearSession();
   };
+
+  // Any authenticated request that comes back 401 (token expired after 12 h,
+  // or account removed) sends the user back to the login screen.
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      clearSession().catch((error) => console.warn('Failed to clear session', error));
+    });
+    return () => setUnauthorizedHandler(null);
+  }, []);
 
   const value = useMemo(
     () => ({ user, token, initializing, login, register, logout }),

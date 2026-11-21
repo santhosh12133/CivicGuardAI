@@ -312,7 +312,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 The repository explicitly tracks these as remaining work rather than hiding them:
 
-1. Move uploaded images from local filesystem to durable object storage.
+1. Move photos from PostgreSQL to object storage once volume outgrows the database (they are stored in the `photos` table today so they survive restarts on Render's free tier).
 2. Replace the process-local limiter with distributed/shared rate limiting for multiple replicas.
 3. Introduce a formal migration runner for production schema changes.
 4. Harden browser authentication/session storage.

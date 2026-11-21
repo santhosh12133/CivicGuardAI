@@ -45,6 +45,20 @@ Conceptual fields include:
 
 Exact field names and constraints must be confirmed against the current Sequelize model before schema migrations or external consumers are generated.
 
+### Photo
+
+Uploaded evidence and resolution photos, stored in PostgreSQL so they survive restarts and redeploys on hosts with an ephemeral filesystem.
+
+| Field | Purpose |
+|---|---|
+| `name` | Primary key; the generated upload filename, which is also the last segment of `photo_url` / `resolved_photo_url` |
+| `mime_type` | Served `Content-Type` |
+| `size` | Bytes |
+| `data` | Image bytes (`bytea`) |
+| `created_at` | Upload time |
+
+Photos are deleted with their issue, when a newer resolution photo replaces them, and when the request that uploaded them fails. `npm run prune-uploads` removes any others no issue references.
+
 ## 3. Status semantics
 
 `status` is an operational workflow state:

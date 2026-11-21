@@ -56,6 +56,9 @@ jobs:
         run: npm ci
       - name: Build admin portal
         working-directory: admin
+        env:
+          # The production build refuses to run without an API URL.
+          VITE_API_URL: https://api.example.invalid/api
         run: npm run build
 
   mobile:

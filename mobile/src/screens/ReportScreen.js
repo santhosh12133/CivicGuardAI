@@ -1,11 +1,19 @@
 import React, { useState } from "react";
-import { View, StyleSheet, Image, ScrollView } from "react-native";
+import { View, StyleSheet, Image, ScrollView, Platform, Linking } from "react-native";
 import { Button, TextInput, Text, Snackbar, HelperText } from "react-native-paper";
 import MapView, { Marker } from "react-native-maps";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
+
+// Google Maps on Android needs an API key baked into the build; rendering
+// MapView without one crashes the app. Without a key, show a link instead.
+const MAP_AVAILABLE =
+  Platform.OS !== "android" || Boolean(process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY);
+
+const openInMaps = ({ latitude, longitude }) =>
+  Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`);
 
 const ReportScreen = ({ navigation }) => {
   const { token } = useAuth();
@@ -137,7 +145,8 @@ const ReportScreen = ({ navigation }) => {
       {coords && <View style={styles.locationSection}><Text style={styles.locationLabel}>Location:</Text><Text style={styles.locationText}>📍 {coords.latitude.toFixed(4)}, {coords.longitude.toFixed(4)}</Text>{address && <Text style={styles.addressText}>📍 {address}</Text>}</View>}
       {error && <HelperText type="error">{error}</HelperText>}
       {uploadStatus && <View style={styles.uploadStatusBox}><Text style={styles.uploadStatusText}>⏳ {uploadStatus}</Text></View>}
-      {coords && <MapView style={styles.map} region={{ latitude: coords.latitude, longitude: coords.longitude, latitudeDelta: 0.0922, longitudeDelta: 0.0421 }} onPress={(e) => setCoords(e.nativeEvent.coordinate)}><Marker draggable coordinate={coords} onDragEnd={(e) => setCoords(e.nativeEvent.coordinate)} /></MapView>}
+      {coords && !MAP_AVAILABLE && <Button mode="text" icon="map-marker" onPress={() => openInMaps(coords)} style={styles.mapLink}>Check location in Maps</Button>}
+      {coords && MAP_AVAILABLE && <MapView style={styles.map} region={{ latitude: coords.latitude, longitude: coords.longitude, latitudeDelta: 0.0922, longitudeDelta: 0.0421 }} onPress={(e) => setCoords(e.nativeEvent.coordinate)}><Marker draggable coordinate={coords} onDragEnd={(e) => setCoords(e.nativeEvent.coordinate)} /></MapView>}
       <Button mode="contained" onPress={handleSubmit} loading={loading} disabled={loading} style={styles.submitButton}>{loading ? "Submitting..." : "Submit Issue"}</Button>
       <Snackbar visible={!!successMessage} onDismiss={() => setSuccessMessage("")} duration={3000}>{successMessage}</Snackbar>
     </ScrollView>
@@ -167,6 +176,7 @@ const styles = StyleSheet.create({
   uploadStatusBox: { marginBottom: 16, padding: 12, backgroundColor: "#e3f2fd", borderRadius: 8 },
   uploadStatusText: { color: "#1565c0", fontStyle: "italic", fontSize: 14 },
   map: { height: 200, marginBottom: 16 },
+  mapLink: { marginBottom: 16, alignSelf: "flex-start" },
 });
 
 export default ReportScreen;

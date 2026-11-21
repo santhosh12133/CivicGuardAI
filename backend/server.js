@@ -13,7 +13,12 @@ const PORT = Number(process.env.PORT || 5000);
 const startServer = async () => {
   try {
     if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) throw new Error('JWT_SECRET must be configured with at least 32 characters');
-    if (isProduction && configuredOrigins.length === 0) throw new Error('CORS_ORIGINS must be configured in production');
+    if (isProduction && configuredOrigins.length === 0) {
+      // Start anyway so the mobile app (which sends no Origin) works and the
+      // admin portal URL can be added after it is deployed. Until then every
+      // browser origin is refused.
+      console.warn('CORS_ORIGINS is not set: the admin portal will be blocked until it is configured.');
+    }
     await connectDB();
 
     // This project currently has no migration runner. Production keeps sync disabled by

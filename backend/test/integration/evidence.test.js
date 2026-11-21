@@ -4,7 +4,8 @@ const fs = require('fs');
 const path = require('path');
 const { startTestServer } = require('../helpers/server');
 const { makePhoto, issueForm } = require('../helpers/photos');
-const { Issue } = require('../../src/models');
+const crypto = require('crypto');
+const { Issue, Photo, sequelize } = require('../../src/models');
 
 // End-to-end checks of the photo evidence rules in issueController.createIssue:
 // EXIF presence, 24-hour photo age, 200 m GPS consistency, and pHash duplicates.
@@ -22,11 +23,13 @@ const UPLOADS_DIR = path.join(__dirname, '..', '..', 'uploads');
 let api;
 let citizen;
 let staff;
+let admin;
 
 before(async () => {
   api = await startTestServer();
   citizen = await api.createUser('citizen');
   staff = await api.createUser('staff');
+  admin = await api.createUser('admin');
 });
 after(async () => { await api.close(); });
 // Each test starts with no stored photos, so duplicate detection is predictable.
@@ -308,4 +311,94 @@ test('pruneOrphanUploads removes old unreferenced uploads only', async () => {
       fs.rmSync(path.join(UPLOADS_DIR, name), { force: true });
     }
   }
+});
+
+// ---------- durable photo storage ----------
+
+const sha = (buffer) => crypto.createHash('sha256').update(buffer).digest('hex');
+const photoName = (url) => url.split('/').pop();
+
+test('photos are stored in the database and survive losing the local uploads folder', async () => {
+  const photo = await makePhoto({ gps: MG_ROAD });
+  const res = await api.request('POST', '/api/issues', {
+    token: citizen.token,
+    form: issueForm({ photo, ...MG_ROAD }),
+  });
+  assert.equal(res.status, 201, JSON.stringify(res.body));
+  const name = photoName(res.body.photo_url);
+
+  const row = await Photo.findByPk(name);
+  assert.ok(row, 'photo row saved');
+  assert.equal(row.mime_type, 'image/jpeg');
+  assert.equal(sha(row.data), sha(photo));
+
+  // Simulate a restart/redeploy on an ephemeral filesystem.
+  fs.rmSync(path.join(UPLOADS_DIR, name), { force: true });
+
+  const served = await fetch(res.body.photo_url);
+  assert.equal(served.status, 200);
+  assert.equal(served.headers.get('content-type'), 'image/jpeg');
+  assert.equal(sha(Buffer.from(await served.arrayBuffer())), sha(photo));
+});
+
+test('/uploads only serves names the API generated', async () => {
+  for (const pathname of ['/uploads/package.json', '/uploads/..%2Fpackage.json', '/uploads/issue-1-zz.jpg']) {
+    const res = await api.request('GET', pathname);
+    assert.equal(res.status, 404, pathname);
+  }
+});
+
+test('deleting an issue removes its photos', async () => {
+  const created = await report({ gps: MG_ROAD }, MG_ROAD)();
+  assert.equal(created.status, 201);
+  const name = photoName(created.body.photo_url);
+
+  const del = await api.request('DELETE', `/api/issues/${created.body.id}`, { token: admin.token });
+  assert.equal(del.status, 204);
+
+  assert.equal(await Photo.findByPk(name), null);
+  assert.equal(fs.existsSync(path.join(UPLOADS_DIR, name)), false);
+  assert.equal((await fetch(created.body.photo_url)).status, 404);
+});
+
+test('replacing a resolution photo removes the previous one', async () => {
+  const created = await report({ gps: MG_ROAD }, MG_ROAD)();
+  const resolve = async () => {
+    const form = new FormData();
+    form.append('status', 'Resolved');
+    form.append('image', new Blob([await makePhoto({ fixture: 'streetlight.jpg' })], { type: 'image/jpeg' }), 'fixed.jpg');
+    const res = await api.request('PUT', `/api/issues/${created.body.id}`, { token: staff.token, form });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    return res.body.resolved_photo_url;
+  };
+
+  const first = await resolve();
+  const second = await resolve();
+  assert.notEqual(first, second);
+
+  await sleep(100); // removal of the old photo runs after the response
+  assert.equal(await Photo.findByPk(photoName(first)), null);
+  assert.ok(await Photo.findByPk(photoName(second)));
+  assert.ok(await Photo.findByPk(photoName(created.body.photo_url)), 'the original evidence photo is kept');
+});
+
+test('pruneOrphanUploads also removes unreferenced photos from the database', async () => {
+  const { pruneOrphanUploads } = require('../../src/utils/orphanUploads');
+  const accepted = await report({ gps: MG_ROAD }, MG_ROAD)();
+  const referenced = photoName(accepted.body.photo_url);
+  const orphan = `issue-${Date.now()}-${'c'.repeat(24)}.jpg`;
+  await Photo.create({ name: orphan, mime_type: 'image/jpeg', size: 1, data: Buffer.from('x') });
+
+  const old = new Date(Date.now() - 2 * HOUR);
+  await sequelize.query('UPDATE photos SET created_at = $1 WHERE name IN ($2, $3)', { bind: [old, orphan, referenced] });
+
+  const dryRun = await pruneOrphanUploads({ dryRun: true });
+  assert.ok(dryRun.orphanRows.includes(orphan));
+  assert.ok(!dryRun.orphanRows.includes(referenced));
+  assert.ok(await Photo.findByPk(orphan), 'dry run deletes nothing');
+
+  const real = await pruneOrphanUploads({ dryRun: false });
+  assert.ok(real.deletedRows.includes(orphan));
+  assert.equal(await Photo.findByPk(orphan), null);
+  assert.ok(await Photo.findByPk(referenced));
 });
