@@ -3,6 +3,7 @@ name: A citizen follows their own report and sees staff updates
 ---
 - launchApp:
     clearState: true
+- runFlow: _dismiss-system-dialogs.yaml
 - extendedWaitUntil:
     visible: "Welcome Back.*"
     timeout: 150000

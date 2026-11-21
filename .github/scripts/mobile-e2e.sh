@@ -36,6 +36,9 @@ for flow in "$FLOWS"/0*.yaml; do
   echo "::group::$name"
   adb logcat -c || true
   adb emu geo fix 77.5946 12.9716 >/dev/null 2>&1 || true
+  # Close any system "isn't responding" dialog left from the previous flow.
+  adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1 || true
+  adb shell input keyevent KEYCODE_HOME >/dev/null 2>&1 || true
   # Emulators on shared CI machines are sometimes slow to start an app, so
   # each flow gets one retry; the log says when a retry was needed.
   if maestro test "${env_args[@]}" --debug-output "$OUT/debug-$name" "$flow"; then

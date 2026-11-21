@@ -5,6 +5,7 @@ name: A citizen reports a new issue with a gallery photo
     clearState: true
     permissions:
       all: allow
+- runFlow: _dismiss-system-dialogs.yaml
 - extendedWaitUntil:
     visible: "Welcome Back.*"
     timeout: 150000

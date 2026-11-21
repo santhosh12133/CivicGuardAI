@@ -3,6 +3,7 @@ name: The server address screen validates input
 ---
 - launchApp:
     clearState: true
+- runFlow: _dismiss-system-dialogs.yaml
 - extendedWaitUntil:
     visible: "Welcome Back.*"
     timeout: 150000

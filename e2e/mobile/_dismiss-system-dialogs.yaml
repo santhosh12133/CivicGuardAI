@@ -1,0 +1,8 @@
+appId: com.civicfix.app
+name: Dismiss Android system dialogs (emulator "isn't responding" prompts)
+---
+- runFlow:
+    when:
+      visible: ".*isn't responding.*"
+    commands:
+      - tapOn: "Wait"

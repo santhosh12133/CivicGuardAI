@@ -3,6 +3,7 @@ name: Sign up, browse issues, filter by category, open an issue
 ---
 - launchApp:
     clearState: true
+- runFlow: _dismiss-system-dialogs.yaml
 - extendedWaitUntil:
     visible: "Welcome Back.*"
     timeout: 150000
