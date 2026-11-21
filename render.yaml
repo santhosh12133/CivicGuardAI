@@ -30,6 +30,10 @@ services:
       # Creates any missing tables on start (including the photos table).
       - key: DB_SYNC
         value: "true"
+      # Optional sign-in methods (see docs/environment-reference.md):
+      # EMAIL_PROVIDER=ses + EMAIL_FROM, SMS_PROVIDER=sns + SMS_*, with AWS_REGION,
+      # AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY of an IAM user that may only
+      # call ses:SendEmail and sns:Publish; GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET.
 
 # NOTE: Render's free Postgres expires 30 days after creation and is deleted
 # 14 days later. For anything beyond a trial, upgrade it to a paid plan or

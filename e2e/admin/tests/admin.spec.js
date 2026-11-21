@@ -237,9 +237,9 @@ test('a staff member resets a forgotten password with a code sent by email', asy
   await expect(page.getByText('If an account exists for that email')).toBeVisible();
 
   await expect.poll(() => latestEmailCode(staffEmail)).toMatch(/^\d{6}$/);
-  await form.getByLabel('Code from the email').fill(latestEmailCode(staffEmail));
-  await form.getByLabel('New password', { exact: true }).fill('reset-by-email-77');
-  await form.getByLabel('Confirm new password').fill('reset-by-email-77');
+  await form.getByLabel(/^Code from the email/).fill(latestEmailCode(staffEmail));
+  await form.getByLabel(/^New password/).fill('reset-by-email-77');
+  await form.getByLabel(/^Confirm new password/).fill('reset-by-email-77');
   await form.getByRole('button', { name: 'Set new password' }).click();
   await expect(page.getByText('Password reset. You can sign in with your new password.')).toBeVisible();
 

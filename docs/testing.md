@@ -59,9 +59,9 @@ Evidence tests stamp the fixture images in `test/fixtures/` with EXIF dates and 
 
 `.github/workflows/e2e.yml` runs on every pull request. Both jobs start the real API on a fresh PostgreSQL database and seed it through the public API with `backend/test/e2e/seed.js` (two citizens, three issues in different categories, one with a real camera-stamped photo, and a staff note).
 
-**Admin portal** (`e2e/admin`, Playwright, Chromium): citizen and wrong-password sign-in refused; Overview statistics and links into filtered lists; issue list category/reporter columns, filters, search and needs-review; deep-link refresh; issue page reporter, photo and timeline; status, category and note updates; resolving with a resolution photo; statistics updating; adding staff with a one-time password; a staff member's restricted view and password change; role changes and password reset; deleting issues; sign-out.
+**Admin portal** (`e2e/admin`, Playwright, Chromium): citizen and wrong-password sign-in refused; Overview statistics and links into filtered lists; issue list category/reporter columns, filters, search and needs-review; deep-link refresh; issue page reporter, photo and timeline; status, category and note updates; resolving with a resolution photo; statistics updating; adding staff with a one-time password; a staff member's restricted view and password change; role changes and password reset; deleting issues; forgot password with the emailed code (read from the API log); a session renewing itself after the access token expires (`ACCESS_TOKEN_TTL=30s`); sign-out ending the server session; account lockout after five wrong passwords; sign-out.
 
-**Android app** (`e2e/mobile`, Maestro, API 34 emulator): sign-up and browsing with category filter and issue details; My Reports with the "Your report" badge and the staff timeline; reporting an issue with a category and a gallery photo through the real evidence checks; changing password (old one refused, new one works); server-address validation.
+**Android app** (`e2e/mobile`, Maestro, API 34 emulator): sign-up and browsing with category filter and issue details; My Reports with the "Your report" badge and the staff timeline; reporting an issue with a category and a gallery photo through the real evidence checks; changing password (old one refused, new one works); server-address validation; phone-number sign-in with an SMS code (a fixed test code via `TEST_OTP_PHONE`/`TEST_OTP_CODE`), creating an account by phone and signing out everywhere.
 
 Failures upload screenshots, traces, device logs and the API log as workflow artifacts.
 
@@ -87,7 +87,11 @@ These were found by the first version of the suite and are now enforced by regul
 - invalid password;
 - expired JWT;
 - missing/malformed bearer token;
-- privileged-role registration rejection.
+- privileged-role registration rejection;
+- refresh-token rotation, reuse detection and sign-out ending sessions (`sessions.test.js`);
+- lockout after five wrong passwords;
+- forgot/reset password, phone codes (expiry, attempts, cooldown) and Google sign-in against a fake Google server with real RS256-signed ID tokens, including wrong audience, issuer, nonce, expiry and signature (`signin-methods.test.js`);
+- AWS request signing against AWS's published example signature (`awsSigV4.test.js`).
 
 ### Authorization
 

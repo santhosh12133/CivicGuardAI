@@ -77,6 +77,34 @@ The database is private, so accounts are created by a task that runs inside AWS:
 
 Use the same workflow with role `staff` for officers (they can update issues but not delete them). Running it again for an existing email gives that person a new password.
 
+### A4b. Optional: more ways to sign in
+
+Email + password works out of the box. Each of these is off until you set it up; the admin portal and app only show a button once the server has it switched on. All settings are **repository variables** (GitHub → Settings → Secrets and variables → Actions → **Variables**), followed by a redeploy (**Actions → Deploy to AWS → Run workflow**).
+
+**Forgot password (email codes, Amazon SES)**
+
+1. AWS console → **Amazon SES** (same region as the deploy) → **Identities → Create identity**. Verify your domain (best) or a single sender address.
+2. New SES accounts are in the *sandbox* and can only email verified addresses. Choose **Request production access** (usually approved within a day) before citizens use it.
+3. Set variable `EMAIL_FROM` = the verified sender, e.g. `no-reply@yourcity.gov.in`.
+
+**Sign in with phone number (SMS codes, Amazon SNS)**
+
+1. AWS console → **Amazon SNS → Text messaging (SMS)**. New accounts are in the SMS sandbox: add your own number as a sandbox destination to test, then request to leave the sandbox and raise the monthly spend limit (the default is USD 1).
+2. For Indian numbers, carriers require DLT registration: register a sender ID and a template on a DLT portal (Jio, Airtel, Vodafone Idea, BSNL). The template must match this message exactly, with the code as the variable:
+   `{#var#} is your CivicFix sign-in code. It expires in 10 minutes. Do not share it.`
+3. Set variables `ENABLE_SMS` = `true`, and `SMS_SENDER_ID`, `SMS_ENTITY_ID`, `SMS_TEMPLATE_ID` from your DLT registration.
+
+**Sign in with Google**
+
+1. [Google Cloud console](https://console.cloud.google.com/apis/credentials) → **OAuth consent screen**: app name CivicFix, publish it.
+2. **Credentials → Create credentials → OAuth client ID → Web application**. Under **Authorized redirect URIs** add `<API address>/api/auth/google/callback` (the API address from the deploy run's Summary).
+3. AWS console → **Secrets Manager → Store a new secret → Other type of secret → Plaintext**, paste only the client secret, name it `civicfix/google-client-secret`. Copy its ARN.
+4. Set variables `GOOGLE_CLIENT_ID` = the client ID and `GOOGLE_CLIENT_SECRET_ARN` = the ARN. The secret itself never goes into GitHub.
+
+In the admin portal Google sign-in only works for people who already have a staff or admin account with the same email. In the app, new Google users become citizens.
+
+The API sends email and SMS with its own AWS role (`civicfix-ecs-task`), which may only send email and SMS — no access keys are stored anywhere.
+
 ### A5. Check everything end to end
 
 Same checklist as [Step 6 below](#step-6-check-everything-end-to-end), using the AWS addresses.

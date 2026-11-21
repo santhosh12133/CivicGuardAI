@@ -27,74 +27,73 @@ The issue router currently permits public reads, authenticated issue creation, s
 Protected endpoints use:
 
 ```http
-Authorization: Bearer <JWT>
+Authorization: Bearer <access token>
 ```
 
-JWT verification is performed by middleware using `JWT_SECRET`. Invalid or expired credentials produce HTTP 401; valid credentials with insufficient role produce HTTP 403. fileciteturn259file0L2-L5
+Every successful sign-in returns two tokens:
+
+| Token | Lifetime | Use |
+|---|---|---|
+| `token` (access) | `ACCESS_TOKEN_TTL`, default 15 minutes | Sent on every request |
+| `refreshToken` | `REFRESH_TOKEN_DAYS`, default 30 days | Sent only to `POST /api/auth/refresh` to get a new pair |
+
+Each access token belongs to a server-side session. Signing out, changing or resetting a password, or an admin resetting it ends sessions immediately; a token of an ended session gets `401` with `code: "SESSION_ENDED"`. An expired access token gets `401` with `code: "TOKEN_EXPIRED"` — the admin portal and app then call `/refresh` once and retry. Refresh tokens rotate: each one works once. Presenting an already-used refresh token is treated as theft and ends every session of that account.
+
+Five wrong passwords in a row lock the account for 15 minutes (`429`, `code: "ACCOUNT_LOCKED"`). Sign-in, code and reset endpoints are limited to `AUTH_RATE_LIMIT_MAX` requests per minute per IP.
 
 ## 3. Authentication endpoints
 
+### GET `/api/auth/providers`
+
+Public. Which sign-in methods this server has switched on, so clients only show working buttons:
+
+```json
+{ "password": true, "google": false, "phone": true, "passwordReset": true }
+```
+
 ### POST `/api/auth/register`
 
-Creates a citizen account.
-
-Request:
-
-```json
-{
-  "name": "Asha Kumar",
-  "email": "asha@example.com",
-  "password": "StrongPassword123!"
-}
-```
-
-Expected success shape:
-
-```json
-{
-  "user": {
-    "id": "<uuid>",
-    "name": "Asha Kumar",
-    "email": "asha@example.com",
-    "role": "citizen"
-  },
-  "token": "<jwt>"
-}
-```
-
-Security contract:
-
-- Never accept `staff` or `admin` as a public registration role.
-- Passwords must be stored as password hashes, never plaintext.
-- Do not return password hashes to clients.
-- Duplicate email should be treated as a conflict.
+Creates a citizen account. Body `{ name, email, password }` (password 8+ characters). `201 { user, token, refreshToken }`; `409` if the email is taken. Staff and admin accounts cannot be self-registered.
 
 ### POST `/api/auth/login`
 
-Request:
+Body `{ email, password }` (email is case-insensitive). `200 { user, token, refreshToken }`; `401` for a wrong email or password (same message for both); `429 ACCOUNT_LOCKED` after five wrong passwords.
 
-```json
-{
-  "email": "asha@example.com",
-  "password": "StrongPassword123!"
-}
-```
+`user` is `{ id, name, email, phone, role, has_password }`.
 
-Response:
+### POST `/api/auth/refresh`
 
-```json
-{
-  "user": {
-    "id": "<uuid>",
-    "name": "Asha Kumar",
-    "email": "asha@example.com",
-    "role": "citizen"
-  },
-  "token": "<jwt>"
-}
-```
+Body `{ refreshToken }`. Returns a new `{ user, token, refreshToken }`; the old refresh token stops working. `401` if it is unknown, expired, revoked or reused.
 
-The deployed session strategy should follow the authentication requirements documented in the security guide; browser localStorage token storage remains a hardening item rather than evidence of a complete secure-session architecture.
+### POST `/api/auth/logout`
+
+Body `{ refreshToken }` (or just the `Authorization` header). Ends that one session. Always `200`.
+
+### POST `/api/auth/logout-all`
+
+Signed in. Ends every session of the account, on every device. Returns `{ sessions: <number ended> }`.
+
+### Forgot password
+
+| Method and path | Body | Result |
+|---|---|---|
+| `POST /api/auth/password/forgot` | `{ email }` | Always the same `200` message, whether or not the account exists. If it does, a 6-digit code valid for 15 minutes is emailed. `503` if email is not configured |
+| `POST /api/auth/password/reset` | `{ email, code, newPassword }` | `200`; signs out every device. `400` for a wrong or expired code (5 tries per code) |
+
+### Sign in with phone number
+
+| Method and path | Body | Result |
+|---|---|---|
+| `POST /api/auth/otp/request` | `{ phone }` in international form, e.g. `+919876543210` | `200`; a 6-digit SMS code valid for 10 minutes. `429` if asked again within 60 seconds or more than 5 times an hour |
+| `POST /api/auth/otp/verify` | `{ phone, code, name? }` | `200 { user, token, refreshToken }` for an existing number. For a new number `name` is required (`400 NAME_REQUIRED` first, without using up the code) and the response is `201` with a new citizen account |
+
+### Sign in with Google
+
+1. The browser or app opens `GET /api/auth/google/start?client=admin` (or `client=app`). It redirects to Google.
+2. Google returns to `GET /api/auth/google/callback`. The API checks Google's signed ID token (signature, issuer, audience, expiry, nonce, verified email), finds or creates the account by Google ID or email, and redirects to `<ADMIN_URL>/login?google_code=…` or `civicfix://auth?google_code=…`.
+3. The client sends `POST /api/auth/google/exchange` with `{ code }` and gets `{ user, token, refreshToken }`. The code works once, for 2 minutes.
+
+New Google users become citizens. Through the admin portal only existing staff and admin accounts can sign in (`error=not_staff` otherwise). Errors come back as `?error=` on the same redirect.
 
 ### GET `/api/auth/me`
 
@@ -102,7 +101,7 @@ Signed in. Returns `{ "user": { id, name, email, role } }` with the role as curr
 
 ### POST `/api/auth/change-password`
 
-Signed in. Body `{ "currentPassword": "...", "newPassword": "..." }` (new: 8+ characters, different from the current one). `400` if the current password is wrong.
+Signed in. Body `{ "currentPassword": "...", "newPassword": "..." }` (new: 8+ characters, different from the current one). `400` if the current password is wrong. Accounts created by phone or Google have no password yet (`has_password: false`) and may omit `currentPassword` to set one. Other devices are signed out; the response says how many (`signedOutSessions`).
 
 ### Account management (admin only)
 
@@ -111,7 +110,7 @@ Signed in. Body `{ "currentPassword": "...", "newPassword": "..." }` (new: 8+ ch
 | `GET /api/auth/users?role=staff,admin` | | `{ users, count }`; `role` filter optional |
 | `POST /api/auth/staff` | `{ name, email, role: "staff" \| "admin" }` | `201 { user, temporaryPassword }`; `409` if the email exists |
 | `PATCH /api/auth/users/:id` | `{ role: "citizen" \| "staff" \| "admin" }` | `{ user }`; `400` for your own account |
-| `POST /api/auth/users/:id/reset-password` | | `{ user, temporaryPassword }` |
+| `POST /api/auth/users/:id/reset-password` | | `{ user, temporaryPassword }`; signs that person out everywhere |
 
 Temporary passwords are shown once; the person should change them after signing in.
 

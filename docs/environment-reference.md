@@ -19,6 +19,19 @@ This file is the operational contract for configuration. Real secrets must never
 | `API_PROTOCOL` | Production: yes | `https` | No | URL scheme used for generated URLs |
 | `RATE_LIMIT_MAX` | No | `300` | No | Requests per minute allowed from one IP address (default 300). Staff behind one office connection share an IP |
 | `GEOCODING_ENABLED` | No | `true` | No | Set to `false` to skip the Nominatim reverse-geocoding call and store a `Location (lat, lon)` label instead. Used by the test suite; also useful offline or during a provider outage |
+| `ACCESS_TOKEN_TTL` | No | `15m` | No | Lifetime of an access token (default `15m`). Apps renew it silently with the refresh token |
+| `REFRESH_TOKEN_DAYS` | No | `30` | No | How long a sign-in lasts without use (default 30 days). Each renewal replaces the refresh token |
+| `AUTH_RATE_LIMIT_MAX` | No | `30` | No | Sign-in, code and reset requests per minute from one IP (default 30) |
+| `EMAIL_PROVIDER` | For "Forgot password" | `ses` | No | `ses` sends reset codes with Amazon SES; `log` prints them to the API log (default outside production). Unset in production = password reset switched off |
+| `EMAIL_FROM` | With `ses` | `no-reply@yourcity.gov.in` | No | Sender address; must be verified in SES |
+| `SMS_PROVIDER` | For phone sign-in | `sns` | No | `sns` sends codes with Amazon SNS; `log` prints them (default outside production). Unset in production = phone sign-in switched off |
+| `SMS_SENDER_ID`, `SMS_ENTITY_ID`, `SMS_TEMPLATE_ID` | India: yes | `CIVFIX` | No | Registered sender ID and DLT entity/template IDs, required by Indian carriers |
+| `AWS_REGION` | With `ses`/`sns` | `ap-south-1` | No | Region for SES/SNS. Credentials come from the ECS task role (or `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` elsewhere) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | For Google sign-in | `1234-abc.apps.googleusercontent.com` | Secret: Yes | Google OAuth "Web application" client. Both unset = Google button hidden |
+| `PUBLIC_API_URL` | No | `https://api.example.com` | No | Public address of the API, used for the Google redirect `<PUBLIC_API_URL>/api/auth/google/callback`. Defaults to the request's own host |
+| `ADMIN_URL` | No | `https://admin.example.com` | No | Where staff return after Google sign-in. Defaults to the first `CORS_ORIGINS` entry |
+| `APP_REDIRECT_URI` | No | `civicfix://auth` | No | Where the citizen app returns after Google sign-in |
+| `TEST_OTP_PHONE`, `TEST_OTP_CODE` | Tests only | `+919999900001`, `246810` | No | A fixed SMS code for one test number (end-to-end tests). Never set in production |
 | `TEST_DATABASE_URL` | Tests only | `postgres://postgres:postgres@localhost:5432/civicguard_test` | Yes | Disposable database for `npm test`. Integration tests drop and recreate every table, so never point this at real data |
 | `DB_SYNC` | Transitional only | `false` | No | Explicit schema synchronization switch; do not rely on it for mature production migration management |
 
