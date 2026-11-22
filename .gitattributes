@@ -1,0 +1,15 @@
+# Normalise line endings in the repository; check out with LF everywhere
+# (shell scripts and Dockerfiles break with CRLF).
+* text=auto eol=lf
+
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.keystore binary
+*.jks binary
+
+# Lock files: collapse in diffs and avoid merge noise.
+package-lock.json linguist-generated=true -diff

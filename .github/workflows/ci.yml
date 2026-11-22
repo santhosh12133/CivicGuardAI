@@ -54,6 +54,9 @@ jobs:
       - name: Install admin dependencies
         working-directory: admin
         run: npm ci
+      - name: Lint admin portal
+        working-directory: admin
+        run: npm run lint
       - name: Build admin portal
         working-directory: admin
         env:

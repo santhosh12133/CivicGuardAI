@@ -1,0 +1,10 @@
+# Reviewers requested automatically for changes in these paths.
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+*                   @santhosh12133
+
+# Security-sensitive areas: changes here need a careful review.
+/backend/src/controllers/authController.js  @santhosh12133
+/backend/src/middleware/                     @santhosh12133
+/backend/src/services/                       @santhosh12133
+/infra/                                      @santhosh12133
+/.github/workflows/                          @santhosh12133

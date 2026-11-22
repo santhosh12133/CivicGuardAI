@@ -367,7 +367,7 @@ const googleStart = (req, res) => {
 const googleCallback = async (req, res) => {
   let state;
   try {
-    state = jwt.verify(String(req.query.state || ''), process.env.JWT_SECRET);
+    state = jwt.verify(String(req.query.state || ''), process.env.JWT_SECRET, { algorithms: ['HS256'] });
     if (state.purpose !== 'google_state') throw new Error('bad state');
   } catch {
     return res.status(400).send('This sign-in link has expired. Please go back and try again.');

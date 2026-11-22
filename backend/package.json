@@ -10,13 +10,11 @@
     "test:unit": "node scripts/run-tests.js unit",
     "test:integration": "node scripts/run-tests.js integration",
     "format": "prettier --write \"src/**/*.js\" server.js",
-    "test:connection": "node scripts/test-connection.js",
+    "check:connection": "node scripts/check-connection.js",
+    "check:geocoding": "node scripts/check-geocoding.js",
+    "create-staff": "node scripts/create-staff-user.js",
     "view-users": "node scripts/view-users.js",
-    "fix-address": "node scripts/fix-address-column.js",
-    "fix-needs-review": "node scripts/add-needs-review-column.js",
-    "add-phash": "node scripts/add-phash-column.js",
-    "prune-uploads": "node scripts/prune-orphan-uploads.js",
-    "create-staff": "node scripts/create-staff-user.js"
+    "prune-uploads": "node scripts/prune-orphan-uploads.js"
   },
   "keywords": [],
   "author": "",

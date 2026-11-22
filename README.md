@@ -1,349 +1,112 @@
-# CivicGuardAI (CivicFix)
+<div align="center">
 
-> A full-stack civic issue reporting and resolution platform connecting citizens with authorized civic staff through a React Native mobile application, a React/Vite administrative portal, and a Node.js/Express API backed by PostgreSQL.
+# CivicFix
 
-[![CI](https://img.shields.io/github/actions/workflow/status/santhosh12133/CivicGuardAI/ci.yml?branch=main&label=CI)](https://github.com/santhosh12133/CivicGuardAI/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-see%20repository-lightgrey)](https://github.com/santhosh12133/CivicGuardAI)
+**Report a civic problem with one photo. Watch it get fixed.**
 
-## What problem it solves
+Citizens report potholes, broken streetlights, garbage and drainage problems from an Android app. Every photo is checked on the server: it must have been taken in the last 24 hours, at the reported spot. Municipal staff triage and resolve reports in a web portal, and citizens follow each report through a public timeline.
 
-CivicGuardAI turns a citizen's observation into a structured, evidence-backed civic report:
+[![CI](https://github.com/santhosh12133/CivicGuardAI/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/santhosh12133/CivicGuardAI/actions/workflows/ci.yml)
+[![End-to-end](https://github.com/santhosh12133/CivicGuardAI/actions/workflows/e2e.yml/badge.svg)](https://github.com/santhosh12133/CivicGuardAI/actions/workflows/e2e.yml)
+![Node.js](https://img.shields.io/badge/node-18%20%7C%2020-339933?logo=node.js&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)
+![Expo](https://img.shields.io/badge/Expo-SDK%2054-000020?logo=expo)
 
-```text
-Capture problem
-    ↓
-Attach photo + location
-    ↓
-Server-side evidence validation
-    ↓
-Persist issue
-    ↓
-Staff/admin review
-    ↓
-Status progression
-    ↓
-Resolution evidence
-```
+[Documentation](docs/README.md) · [Deploy](docs/deployment/README.md) · [API](docs/api/reference.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
-The platform is designed around **evidence validation, role-based workflows, and auditable operations** rather than simply storing a complaint form.
+</div>
 
-## Current architecture
+---
 
-```text
-┌──────────────────────┐      HTTPS       ┌──────────────────────┐
-│ React Native + Expo  │────────────────▶│                      │
-│ Citizen Mobile App   │                 │                      │
-└──────────────────────┘                 │ Node.js + Express API │
-                                         │                      │
-┌──────────────────────┐      HTTPS       │ JWT / RBAC            │
-│ React + Vite         │────────────────▶│ Validation             │
-│ Admin Portal         │                 │ EXIF / GPS / pHash    │
-└──────────────────────┘                 │ Issue Lifecycle        │
-                                         └──────────┬───────────┘
-                                                    │
-                                      ┌─────────────┼─────────────┐
-                                      ▼             ▼             ▼
-                                PostgreSQL     File storage   Geocoder
-```
+## Features
 
-## Key capabilities
-
-- Citizen registration and authentication; change password.
-- Issue categories (pothole, streetlight, garbage, water, drainage, …) with filters.
-- "My Reports" for citizens; staff see who reported each issue.
-- Public updates timeline: status changes, staff notes and resolution photos.
-- Admin overview statistics (by status and category, overdue, needs review, average time to resolve).
-- Staff management in the admin portal (add staff with one-time passwords, change roles, reset passwords).
-- Staff/admin role-based access.
-- Civic issue creation and lifecycle management.
-- Image upload controls.
-- EXIF metadata validation.
-- Photo-date validation.
-- GPS consistency checks.
-- Reverse geocoding.
-- Perceptual-hash duplicate detection.
-- Manual-review signals for suspicious evidence.
-- Resolution image upload.
-- Admin-only deletion.
-- API health monitoring.
-- Global request rate limiting.
-- Production security headers and CORS configuration.
-- Docker/Render deployment configuration.
-- Vercel admin deployment configuration.
-- Expo EAS mobile deployment configuration.
-- GitHub Actions CI: backend unit/integration tests, admin build, mobile config, infrastructure lint, Docker image check.
-- End-to-end tests on every pull request: the admin portal in a real browser (Playwright) and the Android app on an emulator (Maestro), against a real API and database.
-- One-click AWS deployment (ECS Express Mode, RDS, CloudFront) and signed Android APK releases from GitHub Actions.
-
-## Technology stack
-
-| Area | Technology |
+| Citizens (Android app) | Staff and admins (web portal) |
 |---|---|
-| Mobile | React Native, Expo |
-| Admin | React, Vite, Material UI |
-| API | Node.js, Express |
-| ORM | Sequelize |
-| Database | PostgreSQL |
-| Authentication | JWT, bcryptjs |
-| Validation | express-validator |
-| Uploads | Multer |
-| Metadata | ExifTool |
-| Geospatial | geolib + reverse geocoding provider |
-| Image similarity | perceptual hashing (`image-hash`) |
-| Deployment | Docker, Render, Vercel, Expo EAS |
-| CI | GitHub Actions |
+| Sign in with email, phone number + SMS code, or Google | Queue of reports with status, category, reporter, search and filters |
+| Report an issue: photo, category, location | Change status and category, post notes, upload a resolution photo |
+| Follow **My Reports** and their timeline of updates | Overview: backlog, overdue, needs review, average time to resolve |
+| Browse all issues by category | Add staff, change roles, reset passwords (admins) |
 
-The backend package defines Node 18.x compatibility and the main runtime dependencies above. fileciteturn254file0L2-L4
+**Under the hood**
 
-## Repository structure
+- **Evidence checks** — embedded capture date ≤ 24 h, photo GPS ≤ 200 m from the reporter, camera metadata required, perceptual-hash duplicate detection ([details](docs/architecture/evidence-validation.md)).
+- **Secure sessions** — 15-minute access tokens, rotating refresh tokens with reuse detection, real sign-out and "sign out everywhere", account lockout ([details](docs/architecture/authentication.md)).
+- **One-click AWS deployment** — CloudFormation + GitHub Actions with OpenID Connect: no AWS keys anywhere ([guide](docs/deployment/aws.md)).
+- **Tested end to end** — API integration tests on PostgreSQL, Playwright for the portal and Maestro on an Android emulator on every pull request.
 
-```text
-CivicGuardAI/
-├── admin/                  # React/Vite admin portal
-├── backend/                # Express API
-├── mobile/                 # Expo/React Native app
-├── docs/                   # Engineering documentation
-├── .github/workflows/      # CI
-├── DEPLOYMENT.md           # Deployment runbook
-├── PRODUCTION_READINESS.md # Release readiness gate
-├── render.yaml             # Render infrastructure definition
-└── README.md
+## Architecture
+
+```mermaid
+flowchart LR
+  app["Android app<br/>Expo / React Native"] -- HTTPS --> api
+  portal["Admin portal<br/>React + Vite"] -- HTTPS --> api
+  api["CivicFix API<br/>Node.js + Express"] --> db[("PostgreSQL<br/>data + photos")]
+  api -. optional .-> ext["SES · SNS · Google · Nominatim"]
 ```
 
-## Documentation
+| Part | Stack | Folder |
+|---|---|---|
+| API | Node.js 18, Express, Sequelize, ExifTool | [`backend/`](backend) |
+| Admin portal | React 19, Vite, MUI | [`admin/`](admin) |
+| Android app | Expo SDK 54, React Native 0.81, React Native Paper | [`mobile/`](mobile) |
+| Infrastructure | AWS CloudFormation (ECS Express Mode, RDS, CloudFront) | [`infra/aws/`](infra/aws) |
+| End-to-end tests | Playwright, Maestro | [`e2e/`](e2e) |
 
-The detailed engineering documentation lives in [`docs/README.md`](docs/README.md).
+More: [Architecture overview](docs/architecture/overview.md) · [Project structure](docs/getting-started/project-structure.md).
 
-Recommended entry points:
+## Quick start (local)
 
-- [Product & System Overview](docs/product-system-overview.md)
-- [System Architecture](docs/system-architecture.md)
-- [API Reference](docs/api-reference.md)
-- [Data Model](docs/data-model.md)
-- [Evidence Validation](docs/evidence-validation.md)
-- [Security Architecture](docs/security.md)
-- [Threat Model](docs/security-threat-model.md)
-- [Privacy & Data Governance](docs/privacy-data-governance.md)
-- [Testing Strategy](docs/testing.md)
-- [Testing Matrix](docs/testing-matrix.md)
-- [Observability](docs/observability.md)
-- [Incident Response](docs/incident-response.md)
-- [Disaster Recovery](docs/disaster-recovery.md)
-- [Developer Guide](docs/developer-guide.md)
-- [Release Management](docs/release-management.md)
-- [Architecture Decision Records](docs/architecture-decision-records.md)
-- [Environment Reference](docs/environment-reference.md)
-- [Glossary](docs/glossary.md)
-
-## Application flows
-
-### Citizen report flow
-
-```text
-Login/Register
-    ↓
-Request location permission
-    ↓
-Capture/select image
-    ↓
-Review coordinates on map
-    ↓
-Submit multipart request
-    ↓
-API authenticates user
-    ↓
-Validate request + evidence
-    ↓
-Reverse geocode
-    ↓
-Compute pHash / detect similarity
-    ↓
-Persist issue
-```
-
-### Staff/admin flow
-
-```text
-Login
-  ↓
-Protected dashboard
-  ↓
-List/filter issues
-  ↓
-Open issue details
-  ↓
-Review evidence / review flags
-  ↓
-Update status
-  ↓
-Upload resolution evidence
-  ↓
-Resolved
-```
-
-## Security model
-
-The API uses JWT bearer authentication and role-based authorization. Current protected issue routes require staff/admin for updates and admin for deletion. The API also applies CORS controls, request-body limits, upload limits, security headers, and a process-local rate limiter. fileciteturn258file0L2-L6 fileciteturn257file0L2-L5
-
-Security architecture and residual risks are documented in:
-
-- [Security Architecture](docs/security.md)
-- [Threat Model](docs/security-threat-model.md)
-- [Privacy & Data Governance](docs/privacy-data-governance.md)
-
-## Evidence validation
-
-Uploaded evidence is treated as untrusted. The current implementation validates file limits/type, reads EXIF metadata, evaluates photo timestamps, compares available GPS coordinates, reverse-geocodes submitted coordinates, computes a perceptual hash, and flags highly similar images for manual review. fileciteturn263file0L2-L2
-
-Important current application rules include:
-
-- maximum image upload size: 10 MB;
-- photo-age threshold: 24 hours;
-- EXIF/device location comparison threshold: 200 m;
-- pHash similarity review threshold: 90%.
-
-These are implementation rules, not claims of perfect fraud detection. Metadata and perceptual similarity are heuristics and can produce false positives/negatives.
-
-## API
-
-Base API path:
-
-```text
-/api
-```
-
-Core endpoints:
-
-```text
-POST   /api/auth/register
-POST   /api/auth/login
-GET    /api/issues
-GET    /api/issues/:id
-POST   /api/issues
-PUT    /api/issues/:id
-DELETE /api/issues/:id
-GET    /health
-```
-
-See [API Reference](docs/api-reference.md) for authentication, examples, validation, and error semantics.
-
-## Local development
-
-### Backend
+Requires Node.js 18/20 and Docker.
 
 ```bash
-cd backend
-npm ci
-cp .env.example .env
-npm run dev
+git clone https://github.com/santhosh12133/CivicGuardAI.git && cd CivicGuardAI
+npm run install:all
 
-# Tests (integration tests wipe TEST_DATABASE_URL; see docs/testing.md)
-npm run test:unit
+docker run --name civicfix-db -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=civicfix postgres:17
+
+cp backend/.env.example backend/.env   # set DATABASE_URL and JWT_SECRET
+cp admin/.env.example admin/.env
+npm run dev:api                        # http://localhost:5000
+npm run dev:admin                      # http://localhost:5173
+```
+
+Create an admin account with `npm run create-staff --prefix backend -- --email you@example.com --name "You" --role admin`. To run the app on a phone, see [Local development](docs/getting-started/local-development.md).
+
+## Deploy
+
+| Option | For | Guide |
+|---|---|---|
+| **AWS** | Production: private database with backups, HTTPS, automatic deploys | [Deploy on AWS](docs/deployment/aws.md) |
+| Render + Vercel | Free trial (database deleted after ~6 weeks) | [Deploy on Render + Vercel](docs/deployment/render-vercel.md) |
+
+The Android APK is built, tested on an emulator and published to **Releases** by GitHub Actions ([Android app releases](docs/deployment/android-app.md)).
+
+## Testing
+
+```bash
+npm run test:unit                                                    # no database
 TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/civicguard_test npm test
 ```
 
-### Admin
+Integration tests **erase** the `TEST_DATABASE_URL` database. End-to-end suites run in CI on every pull request; see [Testing](docs/testing/strategy.md).
 
-```bash
-cd admin
-npm ci
-cp .env.example .env
-npm run dev
-```
+## Documentation
 
-### Mobile
+All documentation is in [`docs/`](docs/README.md):
 
-```bash
-cd mobile
-npm ci
-cp .env.example .env
-npx expo start
-```
-
-See [Developer Guide](docs/developer-guide.md) and [Environment Reference](docs/environment-reference.md) for configuration details.
-
-## CI
-
-The current GitHub Actions workflow:
-
-- installs backend dependencies and runs `node --check server.js`;
-- runs backend unit and integration tests against PostgreSQL (`npm test`; see [Testing Strategy](docs/testing.md));
-- installs/builds the admin portal;
-- installs mobile dependencies and validates Expo configuration.
-
-See `.github/workflows/ci.yml`. fileciteturn262file0L2-L6
-
-CI passing is necessary but does not by itself prove end-to-end production readiness.
-
-## Deployment
-
-Supported deployment documentation covers:
-
-- Backend: Docker + Render + managed PostgreSQL.
-- Admin: Vite + Vercel.
-- Mobile: Expo EAS.
-
-See [DEPLOYMENT.md](DEPLOYMENT.md) for the operational deployment procedure. The current deployment model also documents important production caveats, including local filesystem uploads, process-local rate limiting, migration maturity, and the need for centralized observability and restore testing. fileciteturn255file0L2-L2
-
-## Production readiness
-
-The project should be described as **production-oriented**, not automatically “production ready”. Production sign-off requires runtime evidence for:
-
-- PostgreSQL integration;
-- representative Android/iOS photo validation;
-- authentication and authorization;
-- upload processing;
-- target object-storage architecture;
-- backup/restore;
-- monitoring/alerting;
-- performance under expected workload;
-- rollback/recovery.
-
-See [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) for the current release gate. fileciteturn256file0L2-L4
-
-## Engineering standards
-
-Changes should follow the documentation and contribution rules:
-
-- API changes -> update API Reference + tests.
-- Database changes -> update Data Model + migration strategy + tests.
-- Evidence changes -> update Evidence Validation + representative fixtures.
-- Security changes -> update Security/Threat Model + negative tests.
-- Configuration changes -> update Environment Reference.
-- Deployment changes -> update Deployment/Release docs.
-- Major architecture changes -> add/update an ADR.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Known production hardening items
-
-The repository explicitly tracks these as remaining work rather than hiding them:
-
-1. Move photos from PostgreSQL to object storage once volume outgrows the database (they are stored in the `photos` table today so they survive restarts on Render's free tier).
-2. Replace the process-local limiter with distributed/shared rate limiting for multiple replicas.
-3. Introduce a formal migration runner for production schema changes.
-4. Harden browser authentication/session storage.
-5. Add broader backend integration/security/E2E tests.
-6. Add centralized logs, metrics, error tracking, and alerting.
-7. Run and record backup/restore drills.
-8. Reduce verbose controller logging and enforce redaction.
-9. Review public issue reads and exact geolocation exposure as a privacy/product decision.
-
-These caveats are also reflected in the deployment and production-readiness documentation. fileciteturn255file0L2-L2
-
-## Documentation principle
-
-The repository distinguishes:
-
-```text
-Source
-  → Automated verification
-  → Staging verification
-  → Production verification
-```
-
-A feature being implemented in source is not the same as the feature being proven in production.
+- **Understand** — [Product](docs/product/overview.md) · [Architecture](docs/architecture/overview.md) · [Data model](docs/architecture/data-model.md) · [Decisions](docs/architecture/decisions/README.md)
+- **Build** — [Local development](docs/getting-started/local-development.md) · [API reference](docs/api/reference.md) · [Configuration](docs/reference/configuration.md) · [Testing](docs/testing/strategy.md)
+- **Run** — [Deployment](docs/deployment/README.md) · [Runbook](docs/operations/runbook.md) · [Monitoring](docs/operations/monitoring.md) · [Incident response](docs/operations/incident-response.md) · [Backup and recovery](docs/operations/backup-and-recovery.md)
+- **Secure** — [Security overview](docs/security/overview.md) · [Threat model](docs/security/threat-model.md) · [Privacy](docs/security/privacy.md)
 
 ## Project status
 
-CivicGuardAI is a portfolio-grade, production-oriented full-stack system with a substantial evidence-validation workflow and separate mobile/admin/API surfaces. The next stage is operational hardening and runtime verification rather than adding claims that are not yet measured.
+The platform is feature-complete for a first municipal pilot and deployable to AWS. What remains before a public launch — operator setup such as branch protection, alarms and a restore drill, plus a few planned improvements — is tracked in [Production readiness](docs/operations/production-readiness.md). Changes are recorded in the [changelog](CHANGELOG.md).
+
+## Contributing
+
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and standards, and the [Code of Conduct](CODE_OF_CONDUCT.md). Report security issues privately as described in [SECURITY.md](SECURITY.md).
+
+## License
+
+No license has been chosen yet, so all rights are reserved by the author. Add a `LICENSE` file before accepting outside contributions or reuse.

@@ -3,7 +3,7 @@ name: Deploy to AWS
 # Deploys the CivicFix API, database and admin portal to AWS, then (when run
 # by hand) builds the Android app against the deployed API.
 #
-# One-time setup (see DEPLOYMENT.md, "Deploy on AWS"):
+# One-time setup (see docs/deployment/aws.md):
 #   1. Create the CloudFormation stack from infra/aws/bootstrap.yml.
 #   2. Add its DeployRoleArn output as the repository variable AWS_DEPLOY_ROLE_ARN.
 # Optional repository variables: AWS_REGION (default ap-south-1),
@@ -49,7 +49,7 @@ jobs:
           ROLE: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         run: |
           if [ -z "$ROLE" ]; then
-            echo "::notice::AWS deploy is not set up yet (no AWS_DEPLOY_ROLE_ARN variable). See DEPLOYMENT.md."
+            echo "::notice::AWS deploy is not set up yet (no AWS_DEPLOY_ROLE_ARN variable). See docs/deployment/aws.md."
             echo "configured=false" >> "$GITHUB_OUTPUT"
           else
             echo "configured=true" >> "$GITHUB_OUTPUT"
@@ -267,7 +267,7 @@ jobs:
             echo "| Image | \`$IMAGE_URI\` |"
             echo "| Logs | CloudWatch \`$ApiLogGroupName\` |"
             echo
-            echo "First deploy? Create your admin account (DEPLOYMENT.md, \"Create your admin account on AWS\")."
+            echo "First deploy? Create your admin account (docs/deployment/aws.md, \"Create your admin account\")."
           } >> "$GITHUB_STEP_SUMMARY"
 
   android:

@@ -1,43 +1,33 @@
 ## Summary
 
-Describe what changed and why.
+<!-- What changed and why. Link the issue: "Closes #123". -->
 
-## Change type
+## Type of change
 
 - [ ] Feature
 - [ ] Bug fix
-- [ ] Security
-- [ ] Refactor
+- [ ] Security fix
+- [ ] Refactor (no behaviour change)
 - [ ] Documentation
-- [ ] Infrastructure / deployment
+- [ ] Infrastructure / CI
 
-## Verification
+## How it was tested
 
-- [ ] Backend checks pass
-- [ ] Admin build passes
-- [ ] Mobile configuration passes
-- [ ] Relevant tests added/updated
-- [ ] Manual verification completed where required
+<!-- Tests added or changed, and anything checked by hand (device, browser, deployment). -->
 
-## Security and privacy
+- [ ] `npm test` in `backend/` passes (needs `TEST_DATABASE_URL`)
+- [ ] `npm run lint && npm run build` in `admin/` pass
+- [ ] End-to-end tests updated if a user journey changed (`e2e/`)
 
-- [ ] Authorization reviewed
-- [ ] Input validation reviewed
-- [ ] Upload/privacy impact reviewed
-- [ ] No secrets or real personal data committed
+## Checklist
 
-## Documentation
+- [ ] No secrets, keystores or real personal data committed
+- [ ] Authorization and input validation reviewed for new or changed endpoints
+- [ ] API reference updated if the API contract changed (`docs/api/reference.md`)
+- [ ] Data model updated if the schema changed (`docs/architecture/data-model.md`)
+- [ ] Configuration reference updated if environment variables changed (`docs/reference/configuration.md`)
+- [ ] `CHANGELOG.md` updated under **Unreleased**
 
-- [ ] API docs updated if contract changed
-- [ ] Data model updated if schema changed
-- [ ] Security/threat model updated if attack surface changed
-- [ ] Environment docs updated if configuration changed
-- [ ] Deployment/runbook updated if operational behavior changed
+## Deployment notes
 
-## Release impact
-
-Describe migration, deployment, rollback, and compatibility considerations.
-
-## Evidence
-
-Link CI runs, screenshots, test output, or staging verification where applicable.
+<!-- New environment variables, schema changes, required app update, rollback concerns. Write "None" if there are none. -->

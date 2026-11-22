@@ -1,16 +1,47 @@
-# React + Vite
+# CivicFix admin portal
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React 19 + Vite + MUI web app for municipal staff and administrators: triage reports, update status and category, post notes and resolution photos, see statistics, and manage staff accounts.
 
-Currently, two official plugins are available:
+## Quick start
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+```bash
+cp .env.example .env        # VITE_API_URL=http://localhost:5000/api
+npm ci
+npm run dev                 # http://localhost:5173
+```
 
-## React Compiler
+Sign in with a staff or admin account (`npm run create-staff` in `backend/`). Citizen accounts are refused.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Commands
 
-## Expanding the ESLint configuration
+| Command | Does |
+|---|---|
+| `npm run dev` | Development server with hot reload |
+| `npm run build` | Production build into `dist/` (requires `VITE_API_URL` ending in `/api`) |
+| `npm run preview` | Serve `dist/` locally |
+| `npm run lint` | ESLint |
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Layout
+
+```text
+src/
+├── api/api.js        axios client: token storage, silent refresh, sign-out on expiry
+├── pages/            Login, Overview (stats), Dashboard (issue list), IssueDetails, Staff
+├── components/       Sidebar, Topbar
+├── categories.js     category labels
+└── App.jsx           routes and the protected layout
+```
+
+| Route | Page | Access |
+|---|---|---|
+| `/login` | Sign in, forgot password, Google | Public |
+| `/` | Overview statistics | Staff, admin |
+| `/issues` | Issue list with filters and search | Staff, admin |
+| `/issue/:id` | Issue detail and updates | Staff, admin |
+| `/staff` | Staff management | Admin |
+
+## Deployment
+
+A static site: on AWS it is built and uploaded to S3 + CloudFront by the deploy workflow; on Vercel set the root directory to `admin` and `VITE_API_URL`. See [Deployment](../docs/deployment/README.md). The portal's origin must be in the API's `CORS_ORIGINS`.
+
+End-to-end tests: [`e2e/admin`](../e2e/README.md).

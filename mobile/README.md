@@ -1,83 +1,40 @@
-# CivicFix Mobile (Expo)
+# CivicFix Android app
 
-React Native (Expo) client for the CivicFix platform. Provides authentication, issue reporting, and a tabbed experience connected to the Node.js backend.
+Expo SDK 54 / React Native 0.81 app for citizens: sign up, report an issue with a photo and location, and follow its progress.
 
-## Getting Started
+## Quick start
 
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
-2. Configure the backend URL. The app reads `EXPO_PUBLIC_API_URL` first:
-   ```bash
-   EXPO_PUBLIC_API_URL=http://192.168.x.x:5000 npx expo start
-   ```
-   The URL should point to the backend root; the app adds endpoint paths such as `/health` and `/api/issues` itself.
-
-   For a tunnel or deployed backend, use the corresponding HTTPS URL:
-   ```bash
-   EXPO_PUBLIC_API_URL=https://your-api.example.com npx expo start
-   ```
-
-3. Start the development server:
-   ```bash
-   npm start
-   ```
-4. Scan the QR code using Expo Go on your device. For a local LAN backend, the device and backend computer must be reachable from the same network.
-
-## Features
-
-- **Auth Flow** – Login & Signup screens with validation, JWT persistence, and Axios authentication.
-- **Bottom Tabs** – Home (issue feed), Report (camera + location), Profile (account info).
-- **Issue Reporting** – Capture a photo, obtain GPS location, and submit to `POST /api/issues`.
-- **Issue Feed** – Fetch and render community issues with status chips and metadata.
-- **Responsive UI** – Built with React Native Paper for fast theming and consistent styling.
-
-## Folder Structure
-
-```text
-mobile/
-├── App.js
-├── app.json
-├── src
-│   ├── components
-│   │   └── IssueCard.js
-│   ├── context
-│   │   └── AuthContext.js
-│   ├── navigation
-│   │   └── AppNavigator.js
-│   ├── screens
-│   │   ├── HomeScreen.js
-│   │   ├── LoginScreen.js
-│   │   ├── ProfileScreen.js
-│   │   ├── ReportScreen.js
-│   │   └── SignupScreen.js
-│   └── utils
-│       └── api.js
-└── README.md
+```bash
+cp .env.example .env        # EXPO_PUBLIC_API_URL=http://<your LAN IP>:5000
+npm ci
+npm start                   # scan the QR code with Expo Go, or press "a" for an emulator
 ```
 
-## Notes
+Use your computer's LAN IP, not `localhost` (the phone cannot reach it); the Android emulator reaches your computer at `http://10.0.2.2:5000`. The server can also be changed in the app: **Login → Server**.
 
-- `EXPO_PUBLIC_API_URL` is the supported runtime configuration for the mobile API client.
-- The app currently has a development LAN-IP fallback for backwards compatibility, but configuring `EXPO_PUBLIC_API_URL` is recommended so the app is not tied to one developer machine.
-- Staff/Admin accounts must be provisioned through backend tools; public registration creates citizens only.
-- The Report flow uploads selected images to the backend when an image is provided.
-- Enable PostGIS in PostgreSQL when using the project's geospatial features.
+## Screens
 
-## Troubleshooting
+| Screen | File |
+|---|---|
+| Sign in (email, phone, Google), forgot password, sign up, server address | `LoginScreen`, `PhoneLoginScreen`, `ForgotPasswordScreen`, `SignupScreen`, `ServerScreen` |
+| Home (all issues, category filter) | `HomeScreen` |
+| My Reports | `MyReportsScreen` (exported from `HomeScreen`) |
+| Report an issue | `ReportScreen` |
+| Issue detail and timeline | `IssueDetailScreen` |
+| Profile (password, sign out, sign out everywhere) | `ProfileScreen` |
 
-If the app cannot connect to the backend:
+Sign-in state lives in `src/context/AuthContext.js`; HTTP, token renewal and the server address in `src/utils/api.js`. Tokens are stored in AsyncStorage. Google sign-in returns to the app through the `civicfix://auth` link.
 
-1. Confirm the backend is running on port `5000` (or the configured port).
-2. Confirm `EXPO_PUBLIC_API_URL` points to a reachable backend URL.
-3. Restart Expo after changing an `EXPO_PUBLIC_*` variable.
-4. Check the app logs for the `[api] API_BASE_URL` message.
-5. Verify the backend health endpoint at `<API_BASE_URL>/health`.
+## Configuration
 
-## Next Steps
+| Variable | Purpose |
+|---|---|
+| `EXPO_PUBLIC_API_URL` | API root without `/api`. Optional: without it the app asks on first launch |
+| `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` | Optional map on the report screen |
+| `ANDROID_VERSION_CODE` | Build number for release APKs |
 
-- Add refresh-token/session rotation for long-lived authentication.
-- Build filters and map views for issues.
-- Expand profile management (notifications, saved locations, password reset).
-- Hook Firebase Cloud Messaging for push notifications.
+Package name `com.civicfix.app`, URL scheme `civicfix` (`app.json`).
+
+## Building the APK
+
+Release APKs are built, launch-tested on an emulator and published by GitHub Actions — see [Android app releases](../docs/deployment/android-app.md). End-to-end flows: [`e2e/mobile`](../e2e/README.md).

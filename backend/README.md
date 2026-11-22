@@ -1,157 +1,60 @@
-# CivicFix Backend
+# CivicFix API
 
-Node.js + Express backend for the CivicFix mobile app. Provides authentication, role-based access control, and civic issue reporting APIs backed by PostgreSQL/PostGIS.
+Node.js 18 / Express service that stores accounts, issues and photos in PostgreSQL, checks report evidence, and serves the admin portal and Android app.
 
-## Prerequisites
+## Quick start
 
-- Node.js 18+
-- PostgreSQL with PostGIS extension (`CREATE EXTENSION postgis;`)
-- npm
-
-## Setup
-
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
-2. Create a PostgreSQL database (e.g. `civicfix_db`) and enable PostGIS if desired.
-3. Copy `.env` and update values:
-   ```
-   PORT=5000
-   DATABASE_URL=postgres://postgres:yourpassword@localhost:5432/civicfix_db
-   JWT_SECRET=your_jwt_secret
-   ```
-4. Run database migrations (Sequelize sync is automatic on boot).
-5. Start the development server:
-   ```bash
-   npm run dev
-   ```
-
-The API will be available at `http://localhost:5000`.
-
-## Key Scripts
-
-- `npm start` – start server in production mode.
-- `npm run dev` – run with hot reload (nodemon).
-- `npm run format` – format code with Prettier.
-- `npm run tunnel` – start localtunnel to expose the backend publicly.
-- `npm run dev:tunnel` – run both the server and tunnel simultaneously.
-- `npm run view-users` – view all registered users in the database.
-- `npm run test:connection` – test API connection to backend server.
-
-## Using Localtunnel (for Mobile Development)
-
-To expose your local backend to the internet (for testing with mobile devices):
-
-1. **Install dependencies** (if not already done):
-   ```bash
-   npm install
-   ```
-
-2. **Start the backend server** (in one terminal):
-   ```bash
-   npm run dev
-   ```
-
-3. **Start the tunnel** (in another terminal):
-   ```bash
-   npm run tunnel
-   ```
-
-   This will create a public URL like `https://civicfixapp.loca.lt` pointing to your local server on port 5000.
-
-4. **Update your mobile app** with the tunnel URL:
-   - Set environment variable: `EXPO_PUBLIC_API_URL=https://civicfixapp.loca.lt`
-   - Or update `mobile/src/utils/api.js` with the tunnel URL shown in the terminal
-
-5. **Optional: Run both together**:
-   ```bash
-   npm run dev:tunnel
-   ```
-
-**Note**: The tunnel URL will be displayed in the terminal. Make sure to use the exact URL shown (it may vary if the subdomain is taken).
-
-**Troubleshooting**:
-- If the subdomain is taken, you can set a custom one in `.env`: `TUNNEL_SUBDOMAIN=your-unique-name`
-- Or remove `TUNNEL_SUBDOMAIN` from `.env` to get a random subdomain
-- Keep the tunnel process running while testing your mobile app
-- The tunnel URL is temporary and will change if you restart the tunnel
-
-## Project Structure
-
-```
-backend/
-├── server.js
-├── src
-│   ├── config
-│   │   └── db.js
-│   ├── controllers
-│   │   ├── authController.js
-│   │   └── issueController.js
-│   ├── middleware
-│   │   ├── authMiddleware.js
-│   │   └── errorHandler.js
-│   ├── models
-│   │   ├── Issue.js
-│   │   ├── User.js
-│   │   └── index.js
-│   ├── routes
-│   │   ├── authRoutes.js
-│   │   └── issueRoutes.js
-│   └── utils
-│       └── catchAsync.js
-├── .env
-├── .gitignore
-├── .prettierrc
-├── package.json
-└── README.md
+```bash
+cp .env.example .env        # set DATABASE_URL and JWT_SECRET
+npm ci
+npm run dev                 # http://localhost:5000
+curl http://localhost:5000/health
 ```
 
-## Authentication & Authorization
+Full setup, including a database in Docker: [Local development](../docs/getting-started/local-development.md).
 
-- `/api/auth/register` – citizen sign-up (email, password, name). Returns JWT.
-- `/api/auth/login` – authenticate existing users.
-- `/api/auth/users` – get all users (admin only, requires authentication).
-- JWT payload includes `userId` and `role`.
-- `Authorization: Bearer <token>` header required for protected routes.
-- Staff/Admin roles must be provisioned manually (e.g. direct DB update) for now.
+## Commands
 
-## Viewing Registered Users
+| Command | Does |
+|---|---|
+| `npm run dev` / `npm start` | Start with / without auto-reload |
+| `npm test` | Unit + integration tests (needs `TEST_DATABASE_URL`, a **disposable** database) |
+| `npm run test:unit` | Unit tests only |
+| `npm run create-staff -- --email … --name "…" --role admin` | Create or reset a staff/admin account |
+| `npm run view-users` | List accounts |
+| `npm run prune-uploads [-- --delete]` | Find / delete unreferenced photos |
+| `npm run check:connection [-- <url>]` | Check a running API |
+| `npm run format` | Prettier |
 
-To view all registered users, you can:
+All commands: [Scripts reference](../docs/reference/scripts.md).
 
-1. **Use the view-users script** (recommended):
-   ```bash
-   npm run view-users
-   ```
+## Layout
 
-2. **Query the database directly** using `psql`
+```text
+server.js         start-up checks, database connection, schema sync, listen
+src/app.js        middleware and routes (no listening; used by tests)
+src/routes/       URLs + input validation
+src/controllers/  request handlers
+src/services/     sessions, one-time codes, email/SMS, Google, AWS signing
+src/middleware/   auth, rate limits, uploads, errors
+src/models/       Sequelize models
+src/utils/        EXIF dates, pHash, geocoding, photo store
+scripts/          maintenance commands
+test/             unit/, integration/, e2e/seed.js, fixtures/
+```
 
-3. **Use the admin API endpoint** (requires admin token):
-   ```bash
-   GET /api/auth/users
-   Authorization: Bearer <admin_token>
-   ```
+## Documentation
 
-See `VIEW_USERS.md` for detailed instructions.
+- [API reference](../docs/api/reference.md)
+- [Architecture](../docs/architecture/overview.md), [Authentication](../docs/architecture/authentication.md), [Evidence validation](../docs/architecture/evidence-validation.md), [Data model](../docs/architecture/data-model.md)
+- [Configuration](../docs/reference/configuration.md)
+- [Testing](../docs/testing/strategy.md)
 
-## Issue APIs
+## Docker
 
-- `POST /api/issues` – authenticated citizens create issues.
-- `GET /api/issues` – list all issues.
-- `GET /api/issues/:id` – fetch single issue.
-- `PUT /api/issues/:id` – staff/admin update issue details.
-- `DELETE /api/issues/:id` – admin remove issue.
+```bash
+docker build -t civicfix-api .
+docker run --rm -p 5000:5000 --env-file .env civicfix-api
+```
 
-Each issue stores latitude/longitude and supports status transitions: `Open`, `In Progress`, `Resolved`.
-
-## Health Check
-
-- `GET /health` – simple uptime probe.
-
-## Next Steps
-
-- Add migrations and seeders.
-- Integrate email verification and password reset.
-- Connect with Firebase Cloud Messaging for notifications.
-
+The image runs as the non-root `node` user and includes Amazon RDS's CA bundle at `/app/certs/rds-global-bundle.pem`.

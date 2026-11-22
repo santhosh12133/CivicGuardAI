@@ -52,7 +52,7 @@ jobs:
           NAME: ${{ inputs.name }}
           ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         run: |
-          [ -n "$ROLE_ARN" ] || { echo "::error::Set up AWS first (AWS_DEPLOY_ROLE_ARN variable). See DEPLOYMENT.md."; exit 1; }
+          [ -n "$ROLE_ARN" ] || { echo "::error::Set up AWS first (AWS_DEPLOY_ROLE_ARN variable). See docs/deployment/aws.md."; exit 1; }
           if [ "$TASK" = "create-staff" ]; then
             echo "$EMAIL" | grep -Eq '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' || { echo "::error::Enter a valid email"; exit 1; }
             [ -n "$NAME" ] || { echo "::error::Enter a name"; exit 1; }
