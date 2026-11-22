@@ -3,7 +3,7 @@ name: Deploy to AWS
 # Deploys the CivicFix API, database and admin portal to AWS, then (when run
 # by hand) builds the Android app against the deployed API.
 #
-# One-time setup (see DEPLOYMENT.md, "Deploy on AWS"):
+# One-time setup (see docs/deployment/aws.md):
 #   1. Create the CloudFormation stack from infra/aws/bootstrap.yml.
 #   2. Add its DeployRoleArn output as the repository variable AWS_DEPLOY_ROLE_ARN.
 # Optional repository variables: AWS_REGION (default ap-south-1),
@@ -21,8 +21,8 @@ on:
   push:
     branches: [main]
     paths:
-      - "backend/**"
-      - "admin/**"
+      - "apps/api/**"
+      - "apps/admin/**"
       - "infra/aws/**"
       - ".github/workflows/deploy-aws.yml"
 
@@ -49,7 +49,7 @@ jobs:
           ROLE: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         run: |
           if [ -z "$ROLE" ]; then
-            echo "::notice::AWS deploy is not set up yet (no AWS_DEPLOY_ROLE_ARN variable). See DEPLOYMENT.md."
+            echo "::notice::AWS deploy is not set up yet (no AWS_DEPLOY_ROLE_ARN variable). See docs/deployment/aws.md."
             echo "configured=false" >> "$GITHUB_OUTPUT"
           else
             echo "configured=true" >> "$GITHUB_OUTPUT"
@@ -81,9 +81,9 @@ jobs:
         with:
           node-version: "18.x"
           cache: npm
-          cache-dependency-path: backend/package-lock.json
+          cache-dependency-path: apps/api/package-lock.json
       - name: Backend tests
-        working-directory: backend
+        working-directory: apps/api
         run: |
           npm ci
           npm test
@@ -179,7 +179,7 @@ jobs:
           if aws ecr describe-images --repository-name civicfix-api --image-ids imageTag="$tag" >/dev/null 2>&1; then
             echo "Image $tag already pushed"
           else
-            docker build --pull -t "$ImageRepositoryUri:$tag" backend
+            docker build --pull -t "$ImageRepositoryUri:$tag" apps/api
             docker push "$ImageRepositoryUri:$tag"
           fi
           echo "IMAGE_URI=$ImageRepositoryUri:$tag" >> "$GITHUB_ENV"
@@ -241,10 +241,10 @@ jobs:
         with:
           node-version: "20.x"
           cache: npm
-          cache-dependency-path: admin/package-lock.json
+          cache-dependency-path: apps/admin/package-lock.json
 
       - name: Build and publish the admin portal
-        working-directory: admin
+        working-directory: apps/admin
         env:
           VITE_API_URL: ${{ env.API_URL }}/api
         run: |
@@ -267,7 +267,7 @@ jobs:
             echo "| Image | \`$IMAGE_URI\` |"
             echo "| Logs | CloudWatch \`$ApiLogGroupName\` |"
             echo
-            echo "First deploy? Create your admin account (DEPLOYMENT.md, \"Create your admin account on AWS\")."
+            echo "First deploy? Create your admin account (docs/deployment/aws.md, \"Create your admin account\")."
           } >> "$GITHUB_STEP_SUMMARY"
 
   android:

@@ -1,0 +1,49 @@
+name: Bug report
+description: Something in the API, admin portal or Android app does not work as expected.
+labels: [bug]
+body:
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - API (backend)
+        - Admin portal
+        - Android app
+        - Deployment / infrastructure
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Sign in as a staff member
+        2. Open an issue
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: App version (Profile screen), release tag, or commit SHA of the deployment.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Where it runs (AWS, Render, local), browser or Android version.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: API log lines (CloudWatch `/civicfix/api`), browser console, screenshots. Remove personal data, tokens and passwords first.
+      render: text

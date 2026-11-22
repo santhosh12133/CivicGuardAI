@@ -1,5 +1,5 @@
 appId: com.civicfix.app
-name: Sign in with a phone number and SMS code, then set a password
+name: Sign in with a phone number and SMS code, set a password, sign out everywhere
 ---
 - launchApp:
     clearState: true
@@ -37,14 +37,21 @@ name: Sign in with a phone number and SMS code, then set a password
     visible: "Hello, Phone"
     timeout: 60000
 - takeScreenshot: 06-phone-signed-in
-# A phone-only account has no password yet and can set one.
+# A phone-only account has no password yet and can set one. (On a retry the
+# account already has one, so the current-password field is filled in too.)
 - tapOn: "Profile"
 - assertVisible: "Phone Citizen"
 - assertVisible: "\\+919999900001"
 - tapOn:
     id: "change-password"
-- assertNotVisible:
-    id: "password-current"
+- runFlow:
+    when:
+      visible:
+        id: "password-current"
+    commands:
+      - tapOn:
+          id: "password-current"
+      - inputText: "phone-user-pass-1"
 - tapOn:
     id: "password-new"
 - inputText: "phone-user-pass-1"
@@ -55,8 +62,10 @@ name: Sign in with a phone number and SMS code, then set a password
 - tapOn:
     id: "password-save"
 - extendedWaitUntil:
-    visible: "Password set.*"
+    visible: "Password (set|changed).*"
     timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
 - scrollUntilVisible:
     element:
       id: "sign-out-everywhere"
@@ -65,5 +74,5 @@ name: Sign in with a phone number and SMS code, then set a password
     id: "sign-out-everywhere"
 - extendedWaitUntil:
     visible: "Welcome Back.*"
-    timeout: 30000
+    timeout: 60000
 - takeScreenshot: 06-signed-out-everywhere

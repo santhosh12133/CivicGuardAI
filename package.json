@@ -1,0 +1,17 @@
+{
+  "name": "civicfix",
+  "private": true,
+  "description": "CivicFix monorepo: API, admin portal and Android app in apps/. Convenience scripts only; each app has its own package.json and lock file.",
+  "scripts": {
+    "install:all": "npm ci --prefix apps/api && npm ci --prefix apps/admin && npm ci --prefix apps/mobile",
+    "dev:api": "npm run dev --prefix apps/api",
+    "dev:admin": "npm run dev --prefix apps/admin",
+    "dev:mobile": "npm start --prefix apps/mobile",
+    "test": "npm test --prefix apps/api",
+    "test:unit": "npm run test:unit --prefix apps/api",
+    "lint": "npm run lint --prefix apps/admin",
+    "build:admin": "npm run build --prefix apps/admin",
+    "e2e:admin": "npm test --prefix e2e/admin",
+    "format": "npm run format --prefix apps/api"
+  }
+}

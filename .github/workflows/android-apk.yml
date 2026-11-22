@@ -43,7 +43,7 @@ on:
       - "mobile-v*"
   pull_request:
     paths:
-      - "mobile/**"
+      - "apps/mobile/**"
       - ".github/workflows/android-apk.yml"
       - ".github/scripts/smoke-test-apk.sh"
 
@@ -99,16 +99,16 @@ jobs:
         with:
           node-version: "20.x"
           cache: npm
-          cache-dependency-path: mobile/package-lock.json
+          cache-dependency-path: apps/mobile/package-lock.json
 
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Install dependencies
-        working-directory: mobile
+        working-directory: apps/mobile
         run: npm ci
 
       - name: Generate the Android project
-        working-directory: mobile
+        working-directory: apps/mobile
         run: npx expo prebuild --platform android --no-install
 
       - name: Configure release signing
@@ -118,7 +118,7 @@ jobs:
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          props=mobile/android/gradle.properties
+          props=apps/mobile/android/gradle.properties
           # More memory for the release build (R8, Hermes); later keys win.
           echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g" >> "$props"
           if [ -z "$KEYSTORE_BASE64" ]; then
@@ -137,15 +137,15 @@ jobs:
           echo "SIGNED_WITH_RELEASE_KEY=true" >> "$GITHUB_ENV"
 
       - name: Build release APK
-        working-directory: mobile/android
+        working-directory: apps/mobile/android
         # x86_64 is included so the APK also runs on emulators and Chromebooks.
         run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=armeabi-v7a,arm64-v8a,x86_64
 
       - name: Verify and rename APK
         id: apk
         run: |
-          apk=$(find mobile/android/app/build/outputs/apk/release -name '*.apk' | head -1)
-          version=$(node -p "require('./mobile/app.json').expo.version")
+          apk=$(find apps/mobile/android/app/build/outputs/apk/release -name '*.apk' | head -1)
+          version=$(node -p "require('./apps/mobile/app.json').expo.version")
           name="CivicFix-v${version}-build${ANDROID_VERSION_CODE}.apk"
           mkdir -p dist && cp "$apk" "dist/$name"
 

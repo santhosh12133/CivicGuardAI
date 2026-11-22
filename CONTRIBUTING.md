@@ -1,123 +1,109 @@
-# Contributing to CivicGuardAI
+# Contributing to CivicFix
 
-## Engineering standard
+Thank you for helping. This guide covers how to propose a change and what a mergeable pull request looks like. By taking part you agree to the [Code of Conduct](CODE_OF_CONDUCT.md). Security problems go through [SECURITY.md](SECURITY.md), not public issues.
 
-Contributions should improve the product without weakening security, correctness, maintainability, or operational clarity.
+## Ways to contribute
 
-## Before making a change
+- **Report a bug** or **suggest a feature** with the [issue forms](https://github.com/santhosh12133/CivicGuardAI/issues/new/choose).
+- **Improve the docs** — anything unclear or out of date is a bug.
+- **Fix an issue** — comment on it first so work isn't duplicated. For larger changes, open an issue to agree on the approach before writing code.
 
-- Read the relevant documentation.
-- Identify the affected application (`backend`, `admin`, or `mobile`).
-- Check existing validation and authorization paths.
-- Check whether database schema changes are involved.
-- Identify user/location/image privacy implications.
+## Development setup
 
-## Backend changes
+Follow [Local development](docs/getting-started/local-development.md). In short:
 
-For API changes:
+```bash
+npm run install:all
+# start PostgreSQL, configure apps/api/.env, then
+npm run dev:api
+npm run dev:admin
+```
 
-1. Update route validation.
-2. Update controller/service logic.
-3. Verify authorization.
-4. Update API Reference.
-5. Add positive and negative tests.
-6. Consider rate limiting and error behavior.
+The layout and naming conventions are in [Project structure](docs/getting-started/project-structure.md).
 
-The current issue router validates UUIDs, coordinates, status enums, and selected URLs and applies role middleware to mutations. fileciteturn258file0L2-L6
+## Workflow
 
-## Database changes
+1. Create a branch from `main`: `feat/…`, `fix/…`, `docs/…`, `test/…` or `chore/…`.
+2. Make small, focused commits using [Conventional Commits](https://www.conventionalcommits.org):
 
-Schema changes require:
+   ```text
+   feat(mobile): show the resolution photo in My Reports
+   fix(api): reject photos dated in the future
+   docs(runbook): add secret rotation steps
+   ```
 
-- migration strategy;
-- compatibility assessment;
-- persistence tests;
-- Data Model update;
-- rollback consideration.
+   Types: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `chore`, `ci`. Scopes: `api`/`apps/api`, `apps/admin`, `apps/mobile`, `auth`, `evidence`, `infra`, `e2e`, …
+3. Add or update tests and documentation in the same branch.
+4. Run the checks locally (below), push, and open a pull request. Fill in the template.
+5. CI and the end-to-end suites must pass; a maintainer reviews. Address comments with new commits; they are squashed or merged as one change.
 
-Do not introduce production dependencies on ad-hoc schema synchronization. The repository's deployment/readiness documentation explicitly identifies formal migrations as a remaining production hardening requirement. fileciteturn255file0L2-L2
+## Checks before pushing
 
-## Security changes
+```bash
+# API
+cd apps/api
+npm run test:unit
+TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/civicguard_test npm test
 
-Any authentication, authorization, upload, public-data, or location-data change requires review against:
+# Admin portal (if changed)
+cd apps/admin && npm run lint && VITE_API_URL=http://localhost:5000/api npm run build
 
-- `docs/security.md`;
-- `docs/security-threat-model.md`;
-- `docs/privacy-data-governance.md`.
+# Android app (if changed)
+cd apps/mobile && npx expo config --type public
+```
 
-## Evidence changes
+`TEST_DATABASE_URL` must be a disposable database — the tests erase it.
 
-Any change to EXIF, GPS, geocoding, pHash, or photo-age logic must include representative test cases and update `docs/evidence-validation.md`.
+## Coding standards
 
-## Documentation requirements
+### General
 
-Update documentation in the same change for:
+- Prefer clear code over clever code; comment *why*, not *what*.
+- Keep functions small and side effects obvious. No dead code or commented-out blocks.
+- Format with the project's Prettier settings (`npm run format` in `apps/api/`); ESLint must pass in `apps/admin/`.
+- Never commit secrets, `.env` files, keystores or real personal data.
 
-| Change | Required documentation |
+### API (`apps/api/`)
+
+- Validate every input in the route with `express-validator`; never trust the client, including the app.
+- Check authorization in the route (`requireAuth`, `authorizeRoles`). Every new endpoint gets tests for anonymous, citizen, staff and admin.
+- Catch errors in async handlers and pass them to `next(error)` so the error handler formats them; return `{ message }` with a correct 4xx status for client mistakes.
+- Keep the response shape stable; add fields, don't rename or remove them (installed APKs depend on them).
+- Never log passwords, tokens, codes or full request bodies.
+- Database changes are additive only ([Data model → Schema changes](docs/architecture/data-model.md#schema-changes)).
+- Evidence rules are security controls: changing one needs tests and, if it weakens a rule, an [ADR](docs/architecture/decisions/README.md).
+
+### Admin portal and app
+
+- Use the API client (`apps/admin/src/api/api.js`, `apps/mobile/src/utils/api.js`) so token renewal and errors are handled consistently.
+- Show the API's error message to the user when it is meant for them (evidence rejections, lockout).
+- Add accessible labels (portal) and `testID`s (app) to interactive elements so end-to-end tests can find them.
+- Anything in `VITE_*` / `EXPO_PUBLIC_*` variables is public.
+
+## Documentation
+
+Update in the same pull request:
+
+| If you change… | Update |
 |---|---|
-| API contract | API Reference |
-| Schema | Data Model |
-| Security behavior | Security + Threat Model |
-| Evidence rule | Evidence Validation |
-| Config | Environment Reference |
-| Operations | Observability / Runbook |
-| Architecture | ADR |
-
-## Pull request checklist
-
-```text
-[ ] Clear title and scope
-[ ] Correct application layer identified
-[ ] Tests added/updated
-[ ] Authorization reviewed
-[ ] Sensitive-data handling reviewed
-[ ] Documentation updated
-[ ] CI passes
-[ ] No secrets committed
-[ ] No real personal data committed as fixtures
-[ ] Deployment impact understood
-```
-
-## Test commands
-
-Backend:
-
-```bash
-cd backend
-npm ci
-node --check server.js
-```
-
-Admin:
-
-```bash
-cd admin
-npm ci
-npm run build
-```
-
-Mobile:
-
-```bash
-cd mobile
-npm ci
-npx expo config --type public
-```
-
-These are aligned with the current CI workflow. fileciteturn262file0L2-L6
-
-## Commit style
-
-Use intent-focused messages:
-
-```text
-feat: add issue review audit trail
-fix: reject invalid GPS coordinates
-security: harden upload validation
-test: cover role authorization matrix
-docs: document deployment recovery
-```
+| An endpoint or response | [API reference](docs/api/reference.md) |
+| A table or column | [Data model](docs/architecture/data-model.md) |
+| An environment variable | [Configuration](docs/reference/configuration.md) and `apps/api/.env.example` |
+| Authentication or authorization | [Authentication](docs/architecture/authentication.md), [Security overview](docs/security/overview.md) |
+| Personal data collected or shared | [Privacy](docs/security/privacy.md) |
+| A new risk or mitigation | [Threat model](docs/security/threat-model.md) |
+| Deployment or operations | The relevant guide in [docs/deployment](docs/deployment/README.md) or [docs/operations](docs/operations/runbook.md) |
+| A significant technical choice | A new [ADR](docs/architecture/decisions/README.md) |
+| Anything user-visible | `CHANGELOG.md` under **Unreleased** |
 
 ## Definition of done
 
-A change is complete only when implementation, security, tests, documentation, CI, and deployment implications have been considered.
+- [ ] The change does what the issue asked, and nothing unrelated
+- [ ] Tests cover it at the lowest useful level; all checks pass
+- [ ] Documentation and changelog updated
+- [ ] No secrets or personal data in code, tests, logs or screenshots
+- [ ] Deployment notes written if operators must do something
+
+## Releases
+
+Maintainers release as described in [Release process](docs/deployment/release-process.md).

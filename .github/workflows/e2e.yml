@@ -2,7 +2,7 @@ name: End-to-end
 
 # Drives the real admin portal in a browser (Playwright) and the real Android
 # app on an emulator (Maestro) against a real API and PostgreSQL database
-# seeded by backend/test/e2e/seed.js.
+# seeded by apps/api/test/e2e/seed.js.
 
 on:
   pull_request:
@@ -59,11 +59,11 @@ jobs:
           node-version: "20.x"
           cache: npm
           cache-dependency-path: |
-            backend/package-lock.json
-            admin/package-lock.json
+            apps/api/package-lock.json
+            apps/admin/package-lock.json
 
       - name: Start the API
-        working-directory: backend
+        working-directory: apps/api
         run: |
           npm ci
           STAFF_PASSWORD="$ADMIN_PASSWORD" node scripts/create-staff-user.js --email "$ADMIN_EMAIL" --name "E2E Admin" --role admin
@@ -73,11 +73,11 @@ jobs:
           cat "$RUNNER_TEMP/api.log"; exit 1
 
       - name: Seed data
-        working-directory: backend
+        working-directory: apps/api
         run: API_URL=http://localhost:5000 SEED_OUT="$RUNNER_TEMP/seed.json" node test/e2e/seed.js
 
       - name: Build and serve the admin portal
-        working-directory: admin
+        working-directory: apps/admin
         run: |
           npm ci
           VITE_API_URL=http://localhost:5000/api npm run build
@@ -132,12 +132,12 @@ jobs:
           node-version: "20.x"
           cache: npm
           cache-dependency-path: |
-            backend/package-lock.json
-            mobile/package-lock.json
+            apps/api/package-lock.json
+            apps/mobile/package-lock.json
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Build a test APK that talks to the API on the host
-        working-directory: mobile
+        working-directory: apps/mobile
         env:
           # 10.0.2.2 is the host machine as seen from the Android emulator.
           EXPO_PUBLIC_API_URL: http://10.0.2.2:5000
@@ -151,7 +151,7 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/civicfix-e2e.apk"
 
       - name: Start and seed the API
-        working-directory: backend
+        working-directory: apps/api
         run: |
           npm ci
           STAFF_PASSWORD="$ADMIN_PASSWORD" node scripts/create-staff-user.js --email "$ADMIN_EMAIL" --name "E2E Admin" --role admin

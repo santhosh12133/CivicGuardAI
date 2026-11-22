@@ -1,5 +1,5 @@
 // End-to-end checks of every admin-portal feature against a real API and
-// database seeded by backend/test/e2e/seed.js. Tests run in order and build
+// database seeded by apps/api/test/e2e/seed.js. Tests run in order and build
 // on each other (like a staff member's working day).
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
@@ -13,7 +13,7 @@ const latestEmailCode = (email) => {
   const line = [...lines].reverse().find((l) => l.includes(`[notify:email] to ${email}`));
   return line && line.match(/code is (\d{6})/)[1];
 };
-const RESOLUTION_PHOTO = path.join(__dirname, '..', '..', '..', 'backend', 'test', 'fixtures', 'streetlight.jpg');
+const RESOLUTION_PHOTO = path.join(__dirname, '..', '..', '..', 'apps', 'api', 'test', 'fixtures', 'streetlight.jpg');
 
 test.describe.configure({ mode: 'serial' });
 

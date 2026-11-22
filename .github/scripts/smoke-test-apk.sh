@@ -33,7 +33,7 @@ adb exec-out screencap -p > "$OUT/screen.png" || true
 adb shell cat /sdcard/ui.xml > "$OUT/ui.xml" 2>/dev/null || true
 adb logcat -d > "$OUT/logcat.txt" || true
 
-if grep -E "FATAL EXCEPTION|ReactNativeJS.*(Error|Exception)" "$OUT/logcat.txt" | grep -v "health check failed" > "$OUT/errors.txt"; then
+if grep -E "FATAL EXCEPTION|ReactNativeJS.*(Error|Exception)" "$OUT/logcat.txt" > "$OUT/errors.txt"; then
   echo "::error::The app logged a crash or JavaScript error on launch:"
   head -40 "$OUT/errors.txt"
   exit 1

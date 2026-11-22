@@ -1,0 +1,32 @@
+# Repository-wide ignores. Each app also has its own .gitignore.
+
+# Dependencies and build output
+node_modules/
+dist/
+build/
+coverage/
+
+# Environment and secrets: never commit these
+.env
+.env.*
+!.env.example
+*.keystore
+*.jks
+*.p12
+*.pem
+!apps/api/test/fixtures/*.pem
+keystore.base64.txt
+
+# End-to-end test output
+e2e/admin/test-results/
+e2e/admin/playwright-report/
+e2e/admin/blob-report/
+e2e/mobile/output/
+
+# Logs and OS / editor files
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

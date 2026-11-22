@@ -1,6 +1,6 @@
 name: AWS admin task
 
-# Runs a one-off backend script inside AWS, next to the private database,
+# Runs a one-off API script inside AWS, next to the private database,
 # using the same image and settings as the deployed API.
 #
 #   create-staff   create or reset a staff/admin account. The generated
@@ -52,7 +52,7 @@ jobs:
           NAME: ${{ inputs.name }}
           ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         run: |
-          [ -n "$ROLE_ARN" ] || { echo "::error::Set up AWS first (AWS_DEPLOY_ROLE_ARN variable). See DEPLOYMENT.md."; exit 1; }
+          [ -n "$ROLE_ARN" ] || { echo "::error::Set up AWS first (AWS_DEPLOY_ROLE_ARN variable). See docs/deployment/aws.md."; exit 1; }
           if [ "$TASK" = "create-staff" ]; then
             echo "$EMAIL" | grep -Eq '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' || { echo "::error::Enter a valid email"; exit 1; }
             [ -n "$NAME" ] || { echo "::error::Enter a name"; exit 1; }
