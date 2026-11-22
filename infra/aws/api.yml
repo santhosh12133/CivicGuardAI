@@ -1,0 +1,157 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  CivicFix API on Amazon ECS Express Mode (Fargate behind an HTTPS load
+  balancer with an AWS-provided address). Deployed by
+  .github/workflows/deploy-aws.yml after base.yml; every deploy passes a new
+  image.
+
+Parameters:
+  ImageUri:
+    Type: String
+    Description: Container image to run (ECR URI with tag).
+  ClusterName:
+    Type: String
+  ExecutionRoleArn:
+    Type: String
+  InfrastructureRoleArn:
+    Type: String
+  ApiLogGroupName:
+    Type: String
+  JwtSecretArn:
+    Type: String
+  DbSecretArn:
+    Type: String
+  DbHost:
+    Type: String
+  DbPort:
+    Type: String
+    Default: "5432"
+  CorsOrigins:
+    Type: String
+    Description: Admin portal origin(s), comma-separated.
+  Cpu:
+    Type: String
+    Default: "512"
+    AllowedValues: ["256", "512", "1024", "2048"]
+    Description: CPU units per task (1024 = 1 vCPU).
+  Memory:
+    Type: String
+    Default: "1024"
+    Description: Memory per task in MiB (must be valid for the chosen CPU).
+  MinTasks:
+    Type: Number
+    Default: 1
+  MaxTasks:
+    Type: Number
+    Default: 2
+  TaskRoleArn:
+    Type: String
+  # ---- Optional sign-in features (leave empty to switch off) ----
+  EmailFrom:
+    Type: String
+    Default: ""
+    Description: Verified Amazon SES sender, e.g. no-reply@yourcity.gov.in. Enables "Forgot password".
+  EnableSms:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Enables sign-in with phone number + SMS code (Amazon SNS).
+  SmsSenderId:
+    Type: String
+    Default: ""
+  SmsEntityId:
+    Type: String
+    Default: ""
+    Description: India DLT principal entity id.
+  SmsTemplateId:
+    Type: String
+    Default: ""
+    Description: India DLT template id for the sign-in code message.
+  GoogleClientId:
+    Type: String
+    Default: ""
+  GoogleClientSecretArn:
+    Type: String
+    Default: ""
+    Description: ARN of a Secrets Manager secret (name starting civicfix/) holding the Google client secret.
+
+Conditions:
+  HasEmail: !Not [!Equals [!Ref EmailFrom, ""]]
+  HasSms: !Equals [!Ref EnableSms, "true"]
+  HasSmsSender: !Not [!Equals [!Ref SmsSenderId, ""]]
+  HasSmsEntity: !Not [!Equals [!Ref SmsEntityId, ""]]
+  HasSmsTemplate: !Not [!Equals [!Ref SmsTemplateId, ""]]
+  HasGoogle: !And
+    - !Not [!Equals [!Ref GoogleClientId, ""]]
+    - !Not [!Equals [!Ref GoogleClientSecretArn, ""]]
+
+Resources:
+  ApiService:
+    Type: AWS::ECS::ExpressGatewayService
+    Properties:
+      ServiceName: civicfix-api
+      Cluster: !Ref ClusterName
+      ExecutionRoleArn: !Ref ExecutionRoleArn
+      InfrastructureRoleArn: !Ref InfrastructureRoleArn
+      TaskRoleArn: !Ref TaskRoleArn
+      Cpu: !Ref Cpu
+      Memory: !Ref Memory
+      HealthCheckPath: /health
+      PrimaryContainer:
+        Image: !Ref ImageUri
+        ContainerPort: 5000
+        AwsLogsConfiguration:
+          LogGroup: !Ref ApiLogGroupName
+          LogStreamPrefix: api
+        Environment:
+          - Name: NODE_ENV
+            Value: production
+          - Name: PORT
+            Value: "5000"
+          - Name: API_PROTOCOL
+            Value: https
+          - Name: CORS_ORIGINS
+            Value: !Ref CorsOrigins
+          # Creates any missing tables at start-up (no migration runner yet).
+          - Name: DB_SYNC
+            Value: "true"
+          - Name: DB_HOST
+            Value: !Ref DbHost
+          - Name: DB_PORT
+            Value: !Ref DbPort
+          - Name: DB_NAME
+            Value: civicfix
+          # RDS requires TLS; verify it against Amazon's CA bundle baked into the image.
+          - Name: DATABASE_SSL
+            Value: "true"
+          - Name: DATABASE_SSL_CA
+            Value: /app/certs/rds-global-bundle.pem
+          - Name: AWS_REGION
+            Value: !Ref AWS::Region
+          - !If [HasEmail, { Name: EMAIL_PROVIDER, Value: ses }, !Ref AWS::NoValue]
+          - !If [HasEmail, { Name: EMAIL_FROM, Value: !Ref EmailFrom }, !Ref AWS::NoValue]
+          - !If [HasSms, { Name: SMS_PROVIDER, Value: sns }, !Ref AWS::NoValue]
+          - !If [HasSmsSender, { Name: SMS_SENDER_ID, Value: !Ref SmsSenderId }, !Ref AWS::NoValue]
+          - !If [HasSmsEntity, { Name: SMS_ENTITY_ID, Value: !Ref SmsEntityId }, !Ref AWS::NoValue]
+          - !If [HasSmsTemplate, { Name: SMS_TEMPLATE_ID, Value: !Ref SmsTemplateId }, !Ref AWS::NoValue]
+          - !If [HasGoogle, { Name: GOOGLE_CLIENT_ID, Value: !Ref GoogleClientId }, !Ref AWS::NoValue]
+        Secrets:
+          - Name: JWT_SECRET
+            ValueFrom: !Ref JwtSecretArn
+          - Name: DB_USER
+            ValueFrom: !Sub "${DbSecretArn}:username::"
+          - Name: DB_PASSWORD
+            ValueFrom: !Sub "${DbSecretArn}:password::"
+          - !If [HasGoogle, { Name: GOOGLE_CLIENT_SECRET, ValueFrom: !Ref GoogleClientSecretArn }, !Ref AWS::NoValue]
+      ScalingTarget:
+        MinTaskCount: !Ref MinTasks
+        MaxTaskCount: !Ref MaxTasks
+        AutoScalingMetric: AVERAGE_CPU
+        AutoScalingTargetValue: 60
+
+Outputs:
+  ApiEndpoint:
+    Description: Public HTTPS address of the API.
+    Value: !GetAtt ApiService.Endpoint
+  ServiceArn:
+    Value: !GetAtt ApiService.ServiceArn

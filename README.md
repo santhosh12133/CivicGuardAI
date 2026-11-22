@@ -48,7 +48,12 @@ The platform is designed around **evidence validation, role-based workflows, and
 
 ## Key capabilities
 
-- Citizen registration and authentication.
+- Citizen registration and authentication; change password.
+- Issue categories (pothole, streetlight, garbage, water, drainage, …) with filters.
+- "My Reports" for citizens; staff see who reported each issue.
+- Public updates timeline: status changes, staff notes and resolution photos.
+- Admin overview statistics (by status and category, overdue, needs review, average time to resolve).
+- Staff management in the admin portal (add staff with one-time passwords, change roles, reset passwords).
 - Staff/admin role-based access.
 - Civic issue creation and lifecycle management.
 - Image upload controls.
@@ -66,7 +71,9 @@ The platform is designed around **evidence validation, role-based workflows, and
 - Docker/Render deployment configuration.
 - Vercel admin deployment configuration.
 - Expo EAS mobile deployment configuration.
-- GitHub Actions CI for backend/admin/mobile baseline verification.
+- GitHub Actions CI: backend unit/integration tests, admin build, mobile config, infrastructure lint, Docker image check.
+- End-to-end tests on every pull request: the admin portal in a real browser (Playwright) and the Android app on an emulator (Maestro), against a real API and database.
+- One-click AWS deployment (ECS Express Mode, RDS, CloudFront) and signed Android APK releases from GitHub Actions.
 
 ## Technology stack
 
@@ -229,6 +236,10 @@ cd backend
 npm ci
 cp .env.example .env
 npm run dev
+
+# Tests (integration tests wipe TEST_DATABASE_URL; see docs/testing.md)
+npm run test:unit
+TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/civicguard_test npm test
 ```
 
 ### Admin
@@ -256,6 +267,7 @@ See [Developer Guide](docs/developer-guide.md) and [Environment Reference](docs/
 The current GitHub Actions workflow:
 
 - installs backend dependencies and runs `node --check server.js`;
+- runs backend unit and integration tests against PostgreSQL (`npm test`; see [Testing Strategy](docs/testing.md));
 - installs/builds the admin portal;
 - installs mobile dependencies and validates Expo configuration.
 
@@ -307,7 +319,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 The repository explicitly tracks these as remaining work rather than hiding them:
 
-1. Move uploaded images from local filesystem to durable object storage.
+1. Move photos from PostgreSQL to object storage once volume outgrows the database (they are stored in the `photos` table today so they survive restarts on Render's free tier).
 2. Replace the process-local limiter with distributed/shared rate limiting for multiple replicas.
 3. Introduce a formal migration runner for production schema changes.
 4. Harden browser authentication/session storage.

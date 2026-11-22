@@ -1,0 +1,25 @@
+appId: com.civicfix.app
+name: The server address screen validates input
+---
+- launchApp:
+    clearState: true
+- runFlow: _dismiss-system-dialogs.yaml
+- extendedWaitUntil:
+    visible: "Welcome Back.*"
+    timeout: 150000
+- tapOn:
+    id: "change-server"
+- assertVisible: "Connect to your CivicFix server"
+- tapOn:
+    id: "server-address"
+- eraseText: 200
+- inputText: "http://insecure.example.com"
+- hideKeyboard
+- tapOn:
+    id: "server-connect"
+- extendedWaitUntil:
+    visible: ".*must start with https://.*"
+    timeout: 30000
+- takeScreenshot: 05-server-validation
+- tapOn: "Cancel"
+- assertVisible: "Welcome Back.*"

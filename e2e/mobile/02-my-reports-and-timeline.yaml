@@ -1,0 +1,43 @@
+appId: com.civicfix.app
+name: A citizen follows their own report and sees staff updates
+---
+- launchApp:
+    clearState: true
+- runFlow: _dismiss-system-dialogs.yaml
+- extendedWaitUntil:
+    visible: "Welcome Back.*"
+    timeout: 150000
+- tapOn:
+    id: "login-email"
+- inputText: ${ASHA_EMAIL}
+- tapOn:
+    id: "login-password"
+- inputText: ${ASHA_PASSWORD}
+- hideKeyboard
+- tapOn:
+    id: "login-submit"
+- extendedWaitUntil:
+    visible: "Hello, Asha"
+    timeout: 60000
+- tapOn: "My Reports"
+- extendedWaitUntil:
+    visible: "2 reports you have made.*"
+    timeout: 30000
+- assertVisible: "Streetlight out near bus stop"
+- assertVisible: "Deep pothole on MG Road"
+- assertNotVisible: "Garbage pile on 5th Cross"
+- assertVisible: "Your report"
+- takeScreenshot: 02-my-reports
+- tapOn: "Streetlight out near bus stop"
+- extendedWaitUntil:
+    visible: "Updates"
+    timeout: 30000
+- assertVisible: "In Progress"
+- assertVisible: "Streetlight"
+- assertVisible: "Your report"
+- scrollUntilVisible:
+    element: "Crew scheduled for Monday"
+    direction: DOWN
+- assertVisible: "Status changed to In Progress"
+- assertVisible: ".*city team.*"
+- takeScreenshot: 02-timeline

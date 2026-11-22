@@ -1,0 +1,159 @@
+name: AWS admin task
+
+# Runs a one-off backend script inside AWS, next to the private database,
+# using the same image and settings as the deployed API.
+#
+#   create-staff   create or reset a staff/admin account. The generated
+#                  password is stored in AWS Secrets Manager as
+#                  civicfix/staff/<email>; it never appears in logs.
+#   prune-uploads  list photos no issue references (add "delete" to remove).
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: What to run
+        type: choice
+        options:
+          - create-staff
+          - prune-uploads (list only)
+          - prune-uploads (delete)
+        default: create-staff
+      email:
+        description: "create-staff: email address of the account"
+        type: string
+        required: false
+      name:
+        description: "create-staff: full name"
+        type: string
+        required: false
+      role:
+        description: "create-staff: role"
+        type: choice
+        options: [staff, admin]
+        default: staff
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'ap-south-1' }}
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check inputs
+        env:
+          TASK: ${{ inputs.task }}
+          EMAIL: ${{ inputs.email }}
+          NAME: ${{ inputs.name }}
+          ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          [ -n "$ROLE_ARN" ] || { echo "::error::Set up AWS first (AWS_DEPLOY_ROLE_ARN variable). See DEPLOYMENT.md."; exit 1; }
+          if [ "$TASK" = "create-staff" ]; then
+            echo "$EMAIL" | grep -Eq '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' || { echo "::error::Enter a valid email"; exit 1; }
+            [ -n "$NAME" ] || { echo "::error::Enter a name"; exit 1; }
+          fi
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: civicfix-admin-task-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Find the deployed API's task settings
+        run: |
+          out() { aws cloudformation describe-stacks --stack-name "$1" --query "Stacks[0].Outputs[?OutputKey=='$2'].OutputValue" --output text; }
+          cluster=$(out civicfix-base ClusterName)
+          subnets=$(out civicfix-base SubnetIds)
+          service_arn=$(out civicfix-api ServiceArn)
+          service_name="${service_arn##*/}"
+          taskdef=$(aws ecs describe-services --cluster "$cluster" --services "$service_name" \
+            --query 'services[0].taskDefinition' --output text)
+          if [ -z "$taskdef" ] || [ "$taskdef" = "None" ]; then
+            echo "::error::Could not find the running API service. Deploy first (Deploy to AWS workflow)."
+            exit 1
+          fi
+          container=$(aws ecs describe-task-definition --task-definition "$taskdef" \
+            --query 'taskDefinition.containerDefinitions[0].name' --output text)
+          log_group=$(aws ecs describe-task-definition --task-definition "$taskdef" \
+            --query 'taskDefinition.containerDefinitions[0].logConfiguration.options."awslogs-group"' --output text)
+          log_prefix=$(aws ecs describe-task-definition --task-definition "$taskdef" \
+            --query 'taskDefinition.containerDefinitions[0].logConfiguration.options."awslogs-stream-prefix"' --output text)
+          {
+            echo "CLUSTER=$cluster"; echo "SUBNETS=$subnets"; echo "TASKDEF=$taskdef"
+            echo "CONTAINER=$container"; echo "LOG_GROUP=$log_group"; echo "LOG_PREFIX=$log_prefix"
+          } >> "$GITHUB_ENV"
+
+      - name: Prepare the command
+        env:
+          TASK: ${{ inputs.task }}
+          EMAIL: ${{ inputs.email }}
+          NAME: ${{ inputs.name }}
+          ROLE: ${{ inputs.role }}
+        run: |
+          case "$TASK" in
+            create-staff)
+              password=$(openssl rand -base64 24 | tr -d '/+=' | head -c 24)
+              echo "::add-mask::$password"
+              secret_name="civicfix/staff/$(echo "$EMAIL" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9@._\n-' '-')"
+              payload=$(jq -cn --arg e "$EMAIL" --arg p "$password" --arg r "$ROLE" '{email:$e, password:$p, role:$r}')
+              if aws secretsmanager describe-secret --secret-id "$secret_name" >/dev/null 2>&1; then
+                aws secretsmanager put-secret-value --secret-id "$secret_name" --secret-string "$payload" >/dev/null
+              else
+                aws secretsmanager create-secret --name "$secret_name" --tags Key=app,Value=civicfix \
+                  --description "CivicFix login for $EMAIL" --secret-string "$payload" >/dev/null
+              fi
+              jq -n --arg c "$CONTAINER" --arg e "$EMAIL" --arg n "$NAME" --arg r "$ROLE" --arg p "$password" \
+                '{containerOverrides: [{name: $c,
+                   command: ["node", "scripts/create-staff-user.js", "--email", $e, "--name", $n, "--role", $r],
+                   environment: [{name: "STAFF_PASSWORD", value: $p}]}]}' > overrides.json
+              echo "SECRET_NAME=$secret_name" >> "$GITHUB_ENV"
+              ;;
+            "prune-uploads (list only)")
+              jq -n --arg c "$CONTAINER" '{containerOverrides: [{name: $c, command: ["node", "scripts/prune-orphan-uploads.js"]}]}' > overrides.json
+              ;;
+            "prune-uploads (delete)")
+              jq -n --arg c "$CONTAINER" '{containerOverrides: [{name: $c, command: ["node", "scripts/prune-orphan-uploads.js", "--delete"]}]}' > overrides.json
+              ;;
+          esac
+
+      - name: Run it in AWS
+        run: |
+          task_arn=$(aws ecs run-task \
+            --cluster "$CLUSTER" \
+            --task-definition "$TASKDEF" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],assignPublicIp=ENABLED}" \
+            --overrides file://overrides.json \
+            --query 'tasks[0].taskArn' --output text)
+          rm -f overrides.json
+          echo "Started $task_arn"
+          aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$task_arn"
+
+          task_id="${task_arn##*/}"
+          echo "--- output ---"
+          aws logs get-log-events --log-group-name "$LOG_GROUP" \
+            --log-stream-name "$LOG_PREFIX/$CONTAINER/$task_id" \
+            --query 'events[].message' --output text 2>/dev/null | tr '\t' '\n' || echo "(no log output found)"
+          echo "--------------"
+
+          exit_code=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$task_arn" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          reason=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$task_arn" \
+            --query 'tasks[0].stoppedReason' --output text)
+          if [ "$exit_code" != "0" ]; then
+            echo "::error::The task failed (exit code $exit_code): $reason"
+            exit 1
+          fi
+
+          if [ -n "${SECRET_NAME:-}" ]; then
+            {
+              echo "## Account ready"
+              echo "The password is stored in **AWS Secrets Manager** ($AWS_REGION) as \`$SECRET_NAME\`."
+              echo "Open the secret and choose **Retrieve secret value** to see it."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi

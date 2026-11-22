@@ -44,6 +44,18 @@ The upload layer accepts image MIME types including JPEG, PNG, GIF, and WebP and
 
 Generated filenames use server-side randomization rather than trusting an uploaded filename. fileciteturn256file0L2-L4
 
+If a request that carried a file fails for any reason (validation error, rejected evidence, missing issue, server error), the upload middleware deletes the saved file once the error response is sent. Rejected evidence is therefore not kept or served from `/uploads`.
+
+Files leaked by earlier versions, which did not do this, can be listed and removed with:
+
+```bash
+cd backend
+npm run prune-uploads              # dry run: list unreferenced files
+npm run prune-uploads -- --delete  # delete them
+```
+
+The script only considers files named like the API's own uploads, keeps any file referenced by an issue's `photo_url` or `resolved_photo_url`, and skips files modified in the last hour.
+
 ## 4. EXIF validation
 
 For an uploaded image, ExifTool reads metadata. The implementation looks for camera make/model, `DateTimeOriginal`, and GPS-related fields. An image without significant metadata can be rejected; the application also supports some gallery-photo fallback behavior. fileciteturn263file0L2-L2
@@ -52,7 +64,20 @@ Important limitation: EXIF metadata is not cryptographic proof that a photograph
 
 ## 5. Photo-date rule
 
-The current controller prefers `DateTimeOriginal`, falling back to `FileModifyDate` where appropriate. The current hard-coded maximum age is 24 hours. fileciteturn263file0L2-L2
+The capture date is read only from metadata embedded in the image, in this order: `DateTimeOriginal`, `CreateDate`, then the GPS timestamp (`GPSDateTime`). Filesystem dates (`FileModifyDate`, `FileAccessDate`, `FileInodeChangeDate`) are never used: they describe the copy the server just saved, so they would make every photo look fresh. A photo with no embedded capture date is rejected.
+
+The rules live in `backend/src/utils/photoDate.js`:
+
+| Situation | Result |
+|---|---|
+| No embedded capture date | Rejected (`400`, "no date metadata") |
+| Timezone known, more than 24 hours old | Rejected (`400`, "older than 24 hours") |
+| Timezone known, more than 15 minutes in the future | Rejected (`400`, "in the future"); 15 minutes allows for a phone clock running fast |
+| Timezone known, otherwise | Accepted |
+| No timezone, stale or future in every timezone (UTC−12 to UTC+14) | Rejected |
+| No timezone, otherwise | Accepted with `needs_review = true`, because the exact age cannot be confirmed |
+
+The timezone is known when the photo carries an offset tag (for example `OffsetTimeOriginal`) or embedded GPS, from which ExifTool infers the zone.
 
 This should eventually become an explicit configuration or product policy rather than a hidden constant.
 

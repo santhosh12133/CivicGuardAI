@@ -6,7 +6,10 @@ import { ActivityIndicator, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import LoginScreen from "../screens/LoginScreen";
 import SignupScreen from "../screens/SignupScreen";
-import HomeScreen from "../screens/HomeScreen";
+import ServerScreen from "../screens/ServerScreen";
+import PhoneLoginScreen from "../screens/PhoneLoginScreen";
+import ForgotPasswordScreen from "../screens/ForgotPasswordScreen";
+import HomeScreen, { MyReportsScreen } from "../screens/HomeScreen";
 import ReportScreen from "../screens/ReportScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import IssueDetailScreen from "../screens/IssueDetailScreen";
@@ -36,6 +39,16 @@ const MainTabs = () => (
           <Ionicons name="home" color={color} size={size} />
         ),
         title: "Home",
+      }}
+    />
+    <Tab.Screen
+      name="MyReports"
+      component={MyReportsScreen}
+      options={{
+        tabBarIcon: ({ color, size }) => (
+          <Ionicons name="document-text" color={color} size={size} />
+        ),
+        title: "My Reports",
       }}
     />
     <Tab.Screen
@@ -83,10 +96,15 @@ const HomeStackNavigator = () => (
   </Stack.Navigator>
 );
 
-const AuthNavigator = () => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
+// Without a server address (a build made before the server existed) the app
+// starts on the server screen.
+const AuthNavigator = ({ hasServer }) => (
+  <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName={hasServer ? "Login" : "Server"}>
     <Stack.Screen name="Login" component={LoginScreen} />
     <Stack.Screen name="Signup" component={SignupScreen} />
+    <Stack.Screen name="Server" component={ServerScreen} />
+    <Stack.Screen name="PhoneLogin" component={PhoneLoginScreen} />
+    <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
   </Stack.Navigator>
 );
 
@@ -97,7 +115,7 @@ const LoadingView = () => (
 );
 
 const AppNavigator = () => {
-  const { user, initializing } = useAuth();
+  const { user, initializing, serverUrl } = useAuth();
 
   if (initializing) {
     return <LoadingView />;
@@ -105,7 +123,7 @@ const AppNavigator = () => {
 
   return (
     <NavigationContainer>
-      {user ? <HomeStackNavigator /> : <AuthNavigator />}
+      {user && serverUrl ? <HomeStackNavigator /> : <AuthNavigator hasServer={Boolean(serverUrl)} />}
     </NavigationContainer>
   );
 };

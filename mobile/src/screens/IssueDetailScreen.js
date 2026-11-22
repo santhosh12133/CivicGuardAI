@@ -8,7 +8,8 @@ import {
 } from "react-native";
 import { Text, Button, Chip, Card } from "react-native-paper";
 import { useRoute } from "@react-navigation/native";
-import api, { API_BASE_URL } from "../utils/api";
+import api, { getApiBaseUrl } from "../utils/api";
+import { useCategories, categoryLabel, CATEGORY_ICONS } from "../utils/categories";
 
 const STATUS_COLORS = {
   Open: "#f97316",
@@ -16,7 +17,23 @@ const STATUS_COLORS = {
   Resolved: "#22c55e",
 };
 
+const describeUpdate = (update) => {
+  if (!update.from_status && update.to_status === "Open") return "Reported";
+  if (update.to_status === "Resolved") return "Marked as resolved";
+  if (update.to_status) return `Status changed to ${update.to_status}`;
+  if (update.photo_url && !update.note) return "Photo added";
+  return "Update from the team";
+};
+
+const describeAuthor = (author) => {
+  if (!author) return "CivicFix";
+  if (author.is_me) return "You";
+  if (author.role === "citizen") return "Citizen";
+  return author.name ? `${author.name} (city team)` : "City team";
+};
+
 const IssueDetailScreen = ({ navigation }) => {
+  const categories = useCategories();
   const route = useRoute();
   const { issueId } = route.params || {};
   const [issue, setIssue] = useState(null);
@@ -33,7 +50,7 @@ const IssueDetailScreen = ({ navigation }) => {
       // Replace localhost or 127.0.0.1 (backend may have used localhost when
       // generating upload URLs) with the mobile API base host so images are
       // reachable from the device/emulator.
-      const apiBase = API_BASE_URL.replace(/\/$/, "");
+      const apiBase = getApiBaseUrl().replace(/\/$/, "");
       // If the URL points to the uploads path on any host, rewrite it to use
       // the configured API base. This covers cases where the backend built
       // the URL with localhost, a hostname, or a different LAN IP.
@@ -117,14 +134,22 @@ const IssueDetailScreen = ({ navigation }) => {
         </Text>
       </View>
 
-      {/* Status Chip */}
-      <View style={styles.statusContainer}>
+      {/* Status and category */}
+      <View style={[styles.statusContainer, styles.chipRow]}>
         <Chip
           style={{ backgroundColor: `${statusColor}22` }}
           textStyle={{ color: statusColor, fontWeight: "600" }}
         >
           {issue.status}
         </Chip>
+        <Chip icon={CATEGORY_ICONS[issue.category] || CATEGORY_ICONS.other} style={styles.categoryChip}>
+          {categoryLabel(categories, issue.category)}
+        </Chip>
+        {issue.is_mine && (
+          <Chip style={styles.mineChip} textStyle={styles.mineText}>
+            Your report
+          </Chip>
+        )}
       </View>
 
       {/* Issue Photo */}
@@ -227,6 +252,50 @@ const IssueDetailScreen = ({ navigation }) => {
         </Card>
       )}
 
+      {/* Timeline of updates from the city team */}
+      {Array.isArray(issue.updates) && issue.updates.length > 0 && (
+        <Card style={styles.card}>
+          <Card.Content>
+            <Text variant="titleSmall" style={styles.sectionTitle}>
+              Updates
+            </Text>
+            {issue.updates.map((update, index) => (
+              <View
+                key={update.id}
+                style={[styles.timelineItem, index === issue.updates.length - 1 && styles.timelineItemLast]}
+              >
+                <View
+                  style={[
+                    styles.timelineDot,
+                    { backgroundColor: STATUS_COLORS[update.to_status] || "#94a3b8" },
+                  ]}
+                />
+                <View style={styles.timelineBody}>
+                  <Text variant="bodyMedium" style={styles.timelineTitle}>
+                    {describeUpdate(update)}
+                  </Text>
+                  {update.note ? (
+                    <Text variant="bodyMedium" style={styles.timelineNote}>
+                      {update.note}
+                    </Text>
+                  ) : null}
+                  {update.photo_url ? (
+                    <Image
+                      source={{ uri: normalizeUrl(update.photo_url) }}
+                      style={styles.timelinePhoto}
+                      resizeMode="cover"
+                    />
+                  ) : null}
+                  <Text variant="bodySmall" style={styles.timelineMeta}>
+                    {new Date(update.created_at).toLocaleString()} · {describeAuthor(update.author)}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </Card.Content>
+        </Card>
+      )}
+
       {/* Additional Info */}
       {issue.needs_review && (
         <Card style={styles.warningCard}>
@@ -245,6 +314,59 @@ const IssueDetailScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  categoryChip: {
+    backgroundColor: "#f1f5f9",
+  },
+  mineChip: {
+    backgroundColor: "#dbeafe",
+  },
+  mineText: {
+    color: "#1d4ed8",
+  },
+  timelineItem: {
+    flexDirection: "row",
+    paddingBottom: 16,
+    borderLeftWidth: 2,
+    borderLeftColor: "#e2e8f0",
+    marginLeft: 6,
+    paddingLeft: 16,
+  },
+  timelineItemLast: {
+    borderLeftColor: "transparent",
+    paddingBottom: 0,
+  },
+  timelineDot: {
+    position: "absolute",
+    left: -7,
+    top: 4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  timelineBody: {
+    flex: 1,
+    gap: 4,
+  },
+  timelineTitle: {
+    fontWeight: "600",
+  },
+  timelineNote: {
+    color: "#334155",
+  },
+  timelinePhoto: {
+    width: "100%",
+    height: 160,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  timelineMeta: {
+    color: "#94a3b8",
+  },
   container: {
     flex: 1,
     backgroundColor: "#f8fafc",

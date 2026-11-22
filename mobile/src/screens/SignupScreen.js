@@ -66,6 +66,7 @@ const SignupScreen = () => {
 
         <TextInput
           label="Full Name"
+          testID="signup-name"
           value={name}
           onChangeText={setName}
           mode="outlined"
@@ -74,6 +75,7 @@ const SignupScreen = () => {
 
         <TextInput
           label="Email"
+          testID="signup-email"
           value={email}
           onChangeText={setEmail}
           autoCapitalize="none"
@@ -84,6 +86,7 @@ const SignupScreen = () => {
 
         <TextInput
           label="Password"
+          testID="signup-password"
           value={password}
           onChangeText={setPassword}
           secureTextEntry
@@ -93,6 +96,7 @@ const SignupScreen = () => {
 
         <TextInput
           label="Confirm Password"
+          testID="signup-confirm"
           value={confirmPassword}
           onChangeText={setConfirmPassword}
           secureTextEntry
@@ -102,7 +106,7 @@ const SignupScreen = () => {
 
         {error && <HelperText type="error">{error}</HelperText>}
 
-        <Button mode="contained" onPress={handleSignup} loading={loading} style={styles.button}>
+        <Button mode="contained" onPress={handleSignup} loading={loading} style={styles.button} testID="signup-submit">
           Create Account
         </Button>
 

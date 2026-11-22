@@ -1,16 +1,27 @@
 import React, { useState } from "react";
-import { View, StyleSheet, Image, ScrollView } from "react-native";
-import { Button, TextInput, Text, Snackbar, HelperText } from "react-native-paper";
+import { View, StyleSheet, Image, ScrollView, Platform, Linking } from "react-native";
+import { Button, TextInput, Text, Snackbar, HelperText, Chip } from "react-native-paper";
 import MapView, { Marker } from "react-native-maps";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
+import { useCategories, CATEGORY_ICONS } from "../utils/categories";
+
+// Google Maps on Android needs an API key baked into the build; rendering
+// MapView without one crashes the app. Without a key, show a link instead.
+const MAP_AVAILABLE =
+  Platform.OS !== "android" || Boolean(process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY);
+
+const openInMaps = ({ latitude, longitude }) =>
+  Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`);
 
 const ReportScreen = ({ navigation }) => {
   const { token } = useAuth();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [category, setCategory] = useState(null);
+  const categories = useCategories();
   const [photo, setPhoto] = useState(null);
   const [coords, setCoords] = useState(null);
   const [address, setAddress] = useState(null);
@@ -70,6 +81,10 @@ const ReportScreen = ({ navigation }) => {
   const handleSubmit = async () => {
     const cleanTitle = title.trim();
     const cleanDescription = description.trim();
+    if (!category) {
+      setError("Please choose what kind of problem this is");
+      return;
+    }
     if (!cleanTitle || !cleanDescription) {
       setError("Please provide a title and description");
       return;
@@ -89,6 +104,7 @@ const ReportScreen = ({ navigation }) => {
       const formData = new FormData();
       formData.append("title", cleanTitle);
       formData.append("description", cleanDescription);
+      formData.append("category", category);
       formData.append("latitude", String(locationCoords.latitude));
       formData.append("longitude", String(locationCoords.longitude));
 
@@ -107,6 +123,7 @@ const ReportScreen = ({ navigation }) => {
       setUploadStatus("");
       setTitle("");
       setDescription("");
+      setCategory(null);
       setPhoto(null);
       setAddress(issueData?.address || null);
 
@@ -127,18 +144,34 @@ const ReportScreen = ({ navigation }) => {
       <View style={styles.photoSection}>
         {photo ? <Image source={{ uri: photo.uri }} style={styles.previewImage} resizeMode="contain" /> : <View style={styles.placeholderContainer}><Text style={styles.placeholderIcon}>📸</Text><Text style={styles.placeholderText}>Take a clear photo of the issue</Text><Text style={styles.placeholderSubText}>A photo is required for verification.</Text></View>}
         <View style={styles.buttonGroup}>
-          <Button mode="outlined" onPress={() => handlePickImage("camera")} style={styles.photoButton} icon="camera">{photo ? "Retake Photo" : "Capture Photo"}</Button>
-          <Button mode="outlined" onPress={() => handlePickImage("gallery")} style={styles.photoButton} icon="image">Gallery</Button>
+          <Button mode="outlined" onPress={() => handlePickImage("camera")} style={styles.photoButton} testID="report-camera" icon="camera">{photo ? "Retake Photo" : "Capture Photo"}</Button>
+          <Button mode="outlined" onPress={() => handlePickImage("gallery")} style={styles.photoButton} testID="report-gallery" icon="image">Gallery</Button>
         </View>
         {permissionError && <Text style={styles.permissionError}>{permissionError}</Text>}
       </View>
-      <TextInput label="Title" value={title} onChangeText={setTitle} mode="outlined" style={styles.input} maxLength={120} />
-      <TextInput label="Description" value={description} onChangeText={setDescription} multiline numberOfLines={4} mode="outlined" style={[styles.input, styles.description]} maxLength={2000} />
+      <Text variant="titleSmall" style={styles.categoryLabel}>What kind of problem is it?</Text>
+      <View style={styles.categoryGrid}>
+        {categories.map((item) => (
+          <Chip
+            key={item.id}
+            testID={`category-${item.id}`}
+            icon={CATEGORY_ICONS[item.id]}
+            selected={category === item.id}
+            onPress={() => setCategory(item.id)}
+            style={[styles.categoryChip, category === item.id && styles.categoryChipSelected]}
+          >
+            {item.label}
+          </Chip>
+        ))}
+      </View>
+      <TextInput testID="report-title" label="Title" value={title} onChangeText={setTitle} mode="outlined" style={styles.input} maxLength={120} />
+      <TextInput testID="report-description" label="Description" value={description} onChangeText={setDescription} multiline numberOfLines={4} mode="outlined" style={[styles.input, styles.description]} maxLength={2000} />
       {coords && <View style={styles.locationSection}><Text style={styles.locationLabel}>Location:</Text><Text style={styles.locationText}>📍 {coords.latitude.toFixed(4)}, {coords.longitude.toFixed(4)}</Text>{address && <Text style={styles.addressText}>📍 {address}</Text>}</View>}
       {error && <HelperText type="error">{error}</HelperText>}
       {uploadStatus && <View style={styles.uploadStatusBox}><Text style={styles.uploadStatusText}>⏳ {uploadStatus}</Text></View>}
-      {coords && <MapView style={styles.map} region={{ latitude: coords.latitude, longitude: coords.longitude, latitudeDelta: 0.0922, longitudeDelta: 0.0421 }} onPress={(e) => setCoords(e.nativeEvent.coordinate)}><Marker draggable coordinate={coords} onDragEnd={(e) => setCoords(e.nativeEvent.coordinate)} /></MapView>}
-      <Button mode="contained" onPress={handleSubmit} loading={loading} disabled={loading} style={styles.submitButton}>{loading ? "Submitting..." : "Submit Issue"}</Button>
+      {coords && !MAP_AVAILABLE && <Button mode="text" icon="map-marker" onPress={() => openInMaps(coords)} style={styles.mapLink}>Check location in Maps</Button>}
+      {coords && MAP_AVAILABLE && <MapView style={styles.map} region={{ latitude: coords.latitude, longitude: coords.longitude, latitudeDelta: 0.0922, longitudeDelta: 0.0421 }} onPress={(e) => setCoords(e.nativeEvent.coordinate)}><Marker draggable coordinate={coords} onDragEnd={(e) => setCoords(e.nativeEvent.coordinate)} /></MapView>}
+      <Button testID="report-submit" mode="contained" onPress={handleSubmit} loading={loading} disabled={loading} style={styles.submitButton}>{loading ? "Submitting..." : "Submit Issue"}</Button>
       <Snackbar visible={!!successMessage} onDismiss={() => setSuccessMessage("")} duration={3000}>{successMessage}</Snackbar>
     </ScrollView>
   );
@@ -158,6 +191,10 @@ const styles = StyleSheet.create({
   buttonGroup: { flexDirection: "row", justifyContent: "space-around", width: "100%" },
   permissionError: { color: "#ef4444", fontSize: 14, marginTop: 8, textAlign: "center" },
   input: { marginBottom: 16 },
+  categoryLabel: { marginBottom: 8, fontWeight: "600" },
+  categoryGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
+  categoryChip: { backgroundColor: "#f1f5f9" },
+  categoryChipSelected: { backgroundColor: "#dbeafe" },
   description: { minHeight: 120 },
   submitButton: { marginTop: 8 },
   locationSection: { marginBottom: 16, padding: 12, backgroundColor: "#f1f5f9", borderRadius: 8 },
@@ -167,6 +204,7 @@ const styles = StyleSheet.create({
   uploadStatusBox: { marginBottom: 16, padding: 12, backgroundColor: "#e3f2fd", borderRadius: 8 },
   uploadStatusText: { color: "#1565c0", fontStyle: "italic", fontSize: 14 },
   map: { height: 200, marginBottom: 16 },
+  mapLink: { marginBottom: 16, alignSelf: "flex-start" },
 });
 
 export default ReportScreen;

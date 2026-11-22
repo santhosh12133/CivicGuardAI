@@ -1,9 +1,9 @@
 const multer = require('multer');
-const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 
-const uploadsDir = path.join(__dirname, '../../uploads');
+const { UPLOADS_DIR: uploadsDir, deletePhotos } = require('../utils/photoStore');
+
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
 const extensions = {
@@ -24,7 +24,9 @@ const storage = multer.diskStorage({
 
 const fileFilter = (_req, file, cb) => {
   if (!extensions[file.mimetype]) {
-    return cb(new Error('Only JPEG, PNG, GIF, and WebP images are allowed'));
+    const error = new Error('Only JPEG, PNG, GIF, and WebP images are allowed');
+    error.statusCode = 400;
+    return cb(error);
   }
   return cb(null, true);
 };
@@ -35,6 +37,42 @@ const upload = multer({
   fileFilter,
 });
 
+// Multer reports client mistakes (oversized file, extra files, wrong field
+// name) as MulterError without an HTTP status, which the error handler would
+// otherwise turn into a 500. Give them proper 4xx statuses here.
+const toClientError = (error) => {
+  if (!(error instanceof multer.MulterError)) return error;
+  const clientError = new Error(
+    error.code === 'LIMIT_FILE_SIZE' ? 'Image must be 10 MB or smaller' : error.message
+  );
+  clientError.statusCode = error.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+  return clientError;
+};
+
+// Multer saves the file before the controller validates it. If the request
+// then fails (bad fields, rejected evidence, missing issue, server error),
+// remove the file, and any copy already saved to the photos table, so
+// rejected photos are not kept or served from /uploads.
+const discardFileOnFailure = (req, res) => {
+  if (!req.file || !req.file.filename) return;
+  const { filename } = req.file;
+  res.on('finish', () => {
+    if (res.statusCode < 400) return;
+    deletePhotos(filename).catch((error) => {
+      console.warn('Could not remove rejected upload:', filename, error.code || error.message);
+    });
+  });
+};
+
 module.exports = {
-  single: (fieldName) => upload.single(fieldName),
+  uploadsDir,
+  single: (fieldName) => {
+    const handler = upload.single(fieldName);
+    return (req, res, next) =>
+      handler(req, res, (error) => {
+        if (error) return next(toClientError(error));
+        discardFileOnFailure(req, res);
+        return next();
+      });
+  },
 };

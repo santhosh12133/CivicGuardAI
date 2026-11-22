@@ -37,13 +37,46 @@ Conceptual fields include:
 | `address` | Reverse-geocoded human-readable location |
 | `photo_url` | Original evidence reference |
 | `resolution_photo_url` | Resolution evidence reference |
+| `category` | One of the ids in `backend/src/constants/categories.js` (default `other`) |
 | `status` | `Open`, `In Progress`, `Resolved` |
 | `needs_review` | Manual-review signal |
 | `phash` | Perceptual hash used for similarity checks |
-| `user_id` | Submitting user relationship |
+| `user_id` | Reporting citizen (`users.id`, set to null if the account is removed) |
 | timestamps | Created/updated lifecycle |
 
 Exact field names and constraints must be confirmed against the current Sequelize model before schema migrations or external consumers are generated.
+
+### IssueUpdate
+
+The public timeline of an issue (`issue_updates`), deleted with the issue.
+
+| Field | Purpose |
+|---|---|
+| `id` | UUID |
+| `issue_id` | The issue (`issues.id`) |
+| `user_id` | Who made the change (null if the account was removed) |
+| `from_status` / `to_status` | Set for a status change; the first entry of every issue is `null → Open` |
+| `note` | Message from staff to the citizen (up to 1000 characters) |
+| `photo_url` | Photo added with this update (e.g. a resolution photo) |
+| `created_at` | When it happened |
+
+### Schema upgrades
+
+`syncSchema()` (`backend/src/config/schema.js`) runs at start-up when `DB_SYNC=true` or outside production. It creates missing tables and **adds** missing columns (existing rows get the column default), so a database created by an older version is upgraded in place. It never drops or alters columns; use a proper migration for those.
+
+### Photo
+
+Uploaded evidence and resolution photos, stored in PostgreSQL so they survive restarts and redeploys on hosts with an ephemeral filesystem.
+
+| Field | Purpose |
+|---|---|
+| `name` | Primary key; the generated upload filename, which is also the last segment of `photo_url` / `resolved_photo_url` |
+| `mime_type` | Served `Content-Type` |
+| `size` | Bytes |
+| `data` | Image bytes (`bytea`) |
+| `created_at` | Upload time |
+
+Photos are deleted with their issue, when a newer resolution photo replaces them, and when the request that uploaded them fails. `npm run prune-uploads` removes any others no issue references.
 
 ## 3. Status semantics
 
