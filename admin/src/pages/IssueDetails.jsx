@@ -98,8 +98,10 @@ const IssueDetails = () => {
     }
   };
 
+  // Reload when the route's issue id changes; fetchIssue only uses state setters.
   useEffect(() => {
     fetchIssue();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const errorMessage = (err, fallback) =>
