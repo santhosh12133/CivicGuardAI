@@ -4,7 +4,7 @@
 |---|---|
 | **Access token** | Short-lived (15 min) JWT sent as `Authorization: Bearer …` on every request. See [Authentication](../architecture/authentication.md) |
 | **Admin** | Role with every staff permission plus deleting issues and managing accounts |
-| **Admin portal** | The React web app staff and admins use (`admin/`) |
+| **Admin portal** | The React web app staff and admins use (`apps/admin/`) |
 | **APK** | Android installation file. CivicFix publishes it under GitHub Releases |
 | **Category** | Kind of problem: pothole, road damage, streetlight, garbage, water supply, drainage, traffic signal, fallen tree, other |
 | **Citizen** | Role for members of the public; created by self sign-up |

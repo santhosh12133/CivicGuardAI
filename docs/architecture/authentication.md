@@ -8,13 +8,13 @@ How people sign in, how the API recognises them on every request, and how sessio
 |---|---|---|
 | `citizen` | Self-service: email + password, phone + SMS code, or Google (app) | Android app: report issues, see own reports |
 | `staff` | An admin adds them (portal → Staff) or `create-staff` script | Admin portal: view and update issues, see reporters |
-| `admin` | `create-staff --role admin` or promoted by another admin | Everything staff can, plus delete issues and manage accounts |
+| `apps/admin` | `create-staff --role admin` or promoted by another admin | Everything staff can, plus delete issues and manage accounts |
 
-Public sign-up can never create `staff` or `admin` accounts. Role checks read the role from the database on every request, so promotions and demotions apply immediately.
+Public sign-up can never create `staff` or `apps/admin` accounts. Role checks read the role from the database on every request, so promotions and demotions apply immediately.
 
 ## Tokens and sessions
 
-Every successful sign-in, by any method, calls `startSession` (`backend/src/services/sessions.js`) and returns:
+Every successful sign-in, by any method, calls `startSession` (`apps/api/src/services/sessions.js`) and returns:
 
 | Token | Format | Lifetime | Stored by the client in | Sent |
 |---|---|---|---|---|
@@ -85,7 +85,7 @@ Because every request checks the session, a revoked session stops working immedi
 
 ### One-time codes
 
-Used for password reset (email), phone sign-in (SMS) and the Google hand-over. Implemented in `backend/src/services/otp.js`, stored in `otp_codes`:
+Used for password reset (email), phone sign-in (SMS) and the Google hand-over. Implemented in `apps/api/src/services/otp.js`, stored in `otp_codes`:
 
 | Purpose | Code | Valid for | Limits |
 |---|---|---|---|
@@ -124,7 +124,7 @@ sequenceDiagram
 ```
 
 - The Google tokens never reach the client; the client only gets a 2-minute, single-use hand-over code.
-- Through the portal (`client=admin`), only accounts that already exist with role `staff` or `admin` may sign in; others get `error=not_staff`. New Google users from the app become citizens.
+- Through the portal (`client=admin`), only accounts that already exist with role `staff` or `apps/admin` may sign in; others get `error=not_staff`. New Google users from the app become citizens.
 - The redirect URI registered with Google must be `<PUBLIC_API_URL or API host>/api/auth/google/callback`.
 
 ## Client storage

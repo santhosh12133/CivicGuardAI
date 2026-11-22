@@ -4,10 +4,10 @@ Tests that drive the real admin portal and Android app against a real API and Po
 
 | Suite | Tool | Location | Covers |
 |---|---|---|---|
-| Admin portal | [Playwright](https://playwright.dev) (Chromium) | [`admin/`](admin) | Sign-in rules, statistics, issue list and filters, issue updates and resolution photos, staff management, forgot password, session renewal and sign-out, lockout |
-| Android app | [Maestro](https://maestro.mobile.dev) on an API 34 emulator | [`mobile/`](mobile) | Sign-up and browsing, My Reports and timeline, reporting with a real photo, password change, server address, phone sign-in |
+| Admin portal | [Playwright](https://playwright.dev) (Chromium) | [`e2e/admin/`](admin) | Sign-in rules, statistics, issue list and filters, issue updates and resolution photos, staff management, forgot password, session renewal and sign-out, lockout |
+| Android app | [Maestro](https://maestro.mobile.dev) on an API 34 emulator | [`e2e/mobile/`](mobile) | Sign-up and browsing, My Reports and timeline, reporting with a real photo, password change, server address, phone sign-in |
 
-Test data is created through the public API by [`backend/test/e2e/seed.js`](../backend/test/e2e/seed.js): two citizens (Asha, Ravi), three issues in different categories (one with a real camera-stamped photo) and a staff note. It writes the accounts to a JSON file the suites read (`SEED_FILE`).
+Test data is created through the public API by [`apps/api/test/e2e/seed.js`](../apps/api/test/e2e/seed.js): two citizens (Asha, Ravi), three issues in different categories (one with a real camera-stamped photo) and a staff note. It writes the accounts to a JSON file the suites read (`SEED_FILE`).
 
 Running locally and adding tests: [Testing → End-to-end tests](../docs/testing/strategy.md#end-to-end-tests).
 

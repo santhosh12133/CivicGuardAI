@@ -16,6 +16,9 @@ All notable changes to CivicFix are recorded here. The format follows [Keep a Ch
 
 ### Changed
 
+- **Repository layout:** the apps moved to `apps/api` (was `backend/`), `apps/admin` (was `admin/`) and `apps/mobile` (was `mobile/`); packages renamed `civicfix-api`, `civicfix-admin`, `civicfix-mobile`. Prettier config moved to the root.
+- Replaced the placeholder app icons and the portal's Vite icon with a CivicFix icon.
+- Report creation no longer logs request bodies, coordinates or EXIF details.
 - Photos are stored in PostgreSQL, so they survive restarts and redeploys.
 - Default rate limit raised to 300 requests/minute per IP and made configurable (`RATE_LIMIT_MAX`).
 - Emails are case-insensitive for sign-in.
@@ -42,5 +45,6 @@ All notable changes to CivicFix are recorded here. The format follows [Keep a Ch
 
 ### Operational
 
+- If you configured Vercel or Render by hand, change the root directory to `apps/admin` (Vercel) and the Dockerfile path to `apps/api/Dockerfile` (Render; `render.yaml` is already updated).
 - New optional configuration for email, SMS and Google sign-in ([Sign-in providers](docs/deployment/sign-in-providers.md)). Existing deployments keep working without it.
 - New tables `sessions` and `otp_codes`, and new `users` columns, are created automatically on start-up (`DB_SYNC=true`). Existing signed-in users must sign in again once after upgrading.

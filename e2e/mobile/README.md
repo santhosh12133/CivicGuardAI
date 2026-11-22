@@ -1,6 +1,6 @@
 # Android end-to-end flows (Maestro)
 
-Run by `.github/workflows/e2e.yml` (via `.github/scripts/mobile-e2e.sh`) on an Android emulator against a real API seeded by `backend/test/e2e/seed.js`. Flows run in file-name order.
+Run by `.github/workflows/e2e.yml` (via `.github/scripts/mobile-e2e.sh`) on an Android emulator against a real API seeded by `apps/api/test/e2e/seed.js`. Flows run in file-name order.
 
 | Flow | Checks |
 |---|---|

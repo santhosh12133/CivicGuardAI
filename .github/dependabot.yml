@@ -4,15 +4,15 @@
 version: 2
 updates:
   - package-ecosystem: npm
-    directory: /backend
+    directory: /apps/api
     schedule: { interval: weekly }
     open-pull-requests-limit: 5
     groups:
-      backend-minor-and-patch:
+      api-minor-and-patch:
         update-types: [minor, patch]
 
   - package-ecosystem: npm
-    directory: /admin
+    directory: /apps/admin
     schedule: { interval: weekly }
     open-pull-requests-limit: 5
     groups:
@@ -20,7 +20,7 @@ updates:
         update-types: [minor, patch]
 
   - package-ecosystem: npm
-    directory: /mobile
+    directory: /apps/mobile
     schedule: { interval: monthly }
     open-pull-requests-limit: 3
     ignore:
@@ -39,7 +39,7 @@ updates:
     schedule: { interval: monthly }
 
   - package-ecosystem: docker
-    directory: /backend
+    directory: /apps/api
     schedule: { interval: monthly }
 
   - package-ecosystem: github-actions

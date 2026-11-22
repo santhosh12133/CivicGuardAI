@@ -14,7 +14,7 @@ Follow [Local development](docs/getting-started/local-development.md). In short:
 
 ```bash
 npm run install:all
-# start PostgreSQL, configure backend/.env, then
+# start PostgreSQL, configure apps/api/.env, then
 npm run dev:api
 npm run dev:admin
 ```
@@ -32,7 +32,7 @@ The layout and naming conventions are in [Project structure](docs/getting-starte
    docs(runbook): add secret rotation steps
    ```
 
-   Types: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `chore`, `ci`. Scopes: `api`/`backend`, `admin`, `mobile`, `auth`, `evidence`, `infra`, `e2e`, …
+   Types: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `chore`, `ci`. Scopes: `api`/`apps/api`, `apps/admin`, `apps/mobile`, `auth`, `evidence`, `infra`, `e2e`, …
 3. Add or update tests and documentation in the same branch.
 4. Run the checks locally (below), push, and open a pull request. Fill in the template.
 5. CI and the end-to-end suites must pass; a maintainer reviews. Address comments with new commits; they are squashed or merged as one change.
@@ -41,15 +41,15 @@ The layout and naming conventions are in [Project structure](docs/getting-starte
 
 ```bash
 # API
-cd backend
+cd apps/api
 npm run test:unit
 TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/civicguard_test npm test
 
 # Admin portal (if changed)
-cd admin && npm run lint && VITE_API_URL=http://localhost:5000/api npm run build
+cd apps/admin && npm run lint && VITE_API_URL=http://localhost:5000/api npm run build
 
 # Android app (if changed)
-cd mobile && npx expo config --type public
+cd apps/mobile && npx expo config --type public
 ```
 
 `TEST_DATABASE_URL` must be a disposable database — the tests erase it.
@@ -60,10 +60,10 @@ cd mobile && npx expo config --type public
 
 - Prefer clear code over clever code; comment *why*, not *what*.
 - Keep functions small and side effects obvious. No dead code or commented-out blocks.
-- Format with the project's Prettier settings (`npm run format` in `backend/`); ESLint must pass in `admin/`.
+- Format with the project's Prettier settings (`npm run format` in `apps/api/`); ESLint must pass in `apps/admin/`.
 - Never commit secrets, `.env` files, keystores or real personal data.
 
-### API (`backend/`)
+### API (`apps/api/`)
 
 - Validate every input in the route with `express-validator`; never trust the client, including the app.
 - Check authorization in the route (`requireAuth`, `authorizeRoles`). Every new endpoint gets tests for anonymous, citizen, staff and admin.
@@ -75,7 +75,7 @@ cd mobile && npx expo config --type public
 
 ### Admin portal and app
 
-- Use the API client (`admin/src/api/api.js`, `mobile/src/utils/api.js`) so token renewal and errors are handled consistently.
+- Use the API client (`apps/admin/src/api/api.js`, `apps/mobile/src/utils/api.js`) so token renewal and errors are handled consistently.
 - Show the API's error message to the user when it is meant for them (evidence rejections, lockout).
 - Add accessible labels (portal) and `testID`s (app) to interactive elements so end-to-end tests can find them.
 - Anything in `VITE_*` / `EXPO_PUBLIC_*` variables is public.
@@ -88,7 +88,7 @@ Update in the same pull request:
 |---|---|
 | An endpoint or response | [API reference](docs/api/reference.md) |
 | A table or column | [Data model](docs/architecture/data-model.md) |
-| An environment variable | [Configuration](docs/reference/configuration.md) and `backend/.env.example` |
+| An environment variable | [Configuration](docs/reference/configuration.md) and `apps/api/.env.example` |
 | Authentication or authorization | [Authentication](docs/architecture/authentication.md), [Security overview](docs/security/overview.md) |
 | Personal data collected or shared | [Privacy](docs/security/privacy.md) |
 | A new risk or mitigation | [Threat model](docs/security/threat-model.md) |

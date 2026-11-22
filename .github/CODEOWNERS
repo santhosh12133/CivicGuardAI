@@ -3,8 +3,8 @@
 *                   @santhosh12133
 
 # Security-sensitive areas: changes here need a careful review.
-/backend/src/controllers/authController.js  @santhosh12133
-/backend/src/middleware/                     @santhosh12133
-/backend/src/services/                       @santhosh12133
+/apps/api/src/controllers/authController.js  @santhosh12133
+/apps/api/src/middleware/                     @santhosh12133
+/apps/api/src/services/                       @santhosh12133
 /infra/                                      @santhosh12133
 /.github/workflows/                          @santhosh12133

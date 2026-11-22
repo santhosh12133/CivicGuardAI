@@ -11,7 +11,7 @@ npm run dev                 # http://localhost:5000
 curl http://localhost:5000/health
 ```
 
-Full setup, including a database in Docker: [Local development](../docs/getting-started/local-development.md).
+Full setup, including a database in Docker: [Local development](../../docs/getting-started/local-development.md).
 
 ## Commands
 
@@ -26,7 +26,7 @@ Full setup, including a database in Docker: [Local development](../docs/getting-
 | `npm run check:connection [-- <url>]` | Check a running API |
 | `npm run format` | Prettier |
 
-All commands: [Scripts reference](../docs/reference/scripts.md).
+All commands: [Scripts reference](../../docs/reference/scripts.md).
 
 ## Layout
 
@@ -45,10 +45,10 @@ test/             unit/, integration/, e2e/seed.js, fixtures/
 
 ## Documentation
 
-- [API reference](../docs/api/reference.md)
-- [Architecture](../docs/architecture/overview.md), [Authentication](../docs/architecture/authentication.md), [Evidence validation](../docs/architecture/evidence-validation.md), [Data model](../docs/architecture/data-model.md)
-- [Configuration](../docs/reference/configuration.md)
-- [Testing](../docs/testing/strategy.md)
+- [API reference](../../docs/api/reference.md)
+- [Architecture](../../docs/architecture/overview.md), [Authentication](../../docs/architecture/authentication.md), [Evidence validation](../../docs/architecture/evidence-validation.md), [Data model](../../docs/architecture/data-model.md)
+- [Configuration](../../docs/reference/configuration.md)
+- [Testing](../../docs/testing/strategy.md)
 
 ## Docker
 

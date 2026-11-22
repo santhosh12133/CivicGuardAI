@@ -20,8 +20,8 @@ CivicFix uses [Semantic Versioning](https://semver.org) for the product as a who
 
 | Part | Where the version lives |
 |---|---|
-| Android app | `expo.version` in `mobile/app.json` (shown in the release name); build number = workflow run number |
-| API | `version` in `backend/package.json` |
+| Android app | `expo.version` in `apps/mobile/app.json` (shown in the release name); build number = workflow run number |
+| API | `version` in `apps/api/package.json` |
 | Admin portal | Deployed with the API from the same commit |
 
 Because installed APKs can be old, the API must stay compatible with the last released app version ([API compatibility rules](../api/reference.md#9-api-compatibility-rules)).
@@ -30,11 +30,11 @@ Because installed APKs can be old, the API must stay compatible with the last re
 
 1. **Prepare** — on a branch:
    - Move the *Unreleased* entries in `CHANGELOG.md` under a new heading `## [x.y.z] - YYYY-MM-DD`.
-   - Bump `backend/package.json` and, if the app changed, `mobile/app.json`.
+   - Bump `apps/api/package.json` and, if the app changed, `apps/mobile/app.json`.
    - Open a pull request titled `chore(release): x.y.z`.
 2. **Merge** — CI and end-to-end tests must pass. On AWS the merge deploys the API and portal; watch the *Deploy to AWS* run.
 3. **Verify** — run the [launch checklist](README.md#launch-checklist) against production.
-4. **App** (if `mobile/` changed) — Actions → *Deploy to AWS* → Run workflow with *build APK* ticked (or *Android APK* with the API URL). Check the new release under **Releases** installs over the previous version.
+4. **App** (if `apps/mobile/` changed) — Actions → *Deploy to AWS* → Run workflow with *build APK* ticked (or *Android APK* with the API URL). Check the new release under **Releases** installs over the previous version.
 5. **Tag** — create a GitHub release `vX.Y.Z` on the merge commit (Releases → Draft a new release), pasting the changelog section. Android builds have their own `mobile-v…` tags created by the workflow.
 6. **Announce** — tell staff what changed; tell citizens if they should update the app.
 

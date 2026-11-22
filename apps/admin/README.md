@@ -10,7 +10,7 @@ npm ci
 npm run dev                 # http://localhost:5173
 ```
 
-Sign in with a staff or admin account (`npm run create-staff` in `backend/`). Citizen accounts are refused.
+Sign in with a staff or admin account (`npm run create-staff` in `apps/api/`). Citizen accounts are refused.
 
 ## Commands
 
@@ -42,6 +42,6 @@ src/
 
 ## Deployment
 
-A static site: on AWS it is built and uploaded to S3 + CloudFront by the deploy workflow; on Vercel set the root directory to `admin` and `VITE_API_URL`. See [Deployment](../docs/deployment/README.md). The portal's origin must be in the API's `CORS_ORIGINS`.
+A static site: on AWS it is built and uploaded to S3 + CloudFront by the deploy workflow; on Vercel set the root directory to `apps/admin` and `VITE_API_URL`. See [Deployment](../../docs/deployment/README.md). The portal's origin must be in the API's `CORS_ORIGINS`.
 
-End-to-end tests: [`e2e/admin`](../e2e/README.md).
+End-to-end tests: [`e2e/admin`](../../e2e/README.md).

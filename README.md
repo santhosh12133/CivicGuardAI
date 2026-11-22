@@ -46,9 +46,9 @@ flowchart LR
 
 | Part | Stack | Folder |
 |---|---|---|
-| API | Node.js 18, Express, Sequelize, ExifTool | [`backend/`](backend) |
-| Admin portal | React 19, Vite, MUI | [`admin/`](admin) |
-| Android app | Expo SDK 54, React Native 0.81, React Native Paper | [`mobile/`](mobile) |
+| API | Node.js 18, Express, Sequelize, ExifTool | [`apps/api/`](apps/api) |
+| Admin portal | React 19, Vite, MUI | [`apps/admin/`](apps/admin) |
+| Android app | Expo SDK 54, React Native 0.81, React Native Paper | [`apps/mobile/`](apps/mobile) |
 | Infrastructure | AWS CloudFormation (ECS Express Mode, RDS, CloudFront) | [`infra/aws/`](infra/aws) |
 | End-to-end tests | Playwright, Maestro | [`e2e/`](e2e) |
 
@@ -64,13 +64,13 @@ npm run install:all
 
 docker run --name civicfix-db -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=civicfix postgres:17
 
-cp backend/.env.example backend/.env   # set DATABASE_URL and JWT_SECRET
-cp admin/.env.example admin/.env
+cp apps/api/.env.example apps/api/.env     # set DATABASE_URL and JWT_SECRET
+cp apps/admin/.env.example apps/admin/.env
 npm run dev:api                        # http://localhost:5000
 npm run dev:admin                      # http://localhost:5173
 ```
 
-Create an admin account with `npm run create-staff --prefix backend -- --email you@example.com --name "You" --role admin`. To run the app on a phone, see [Local development](docs/getting-started/local-development.md).
+Create an admin account with `npm run create-staff --prefix apps/api -- --email you@example.com --name "You" --role admin`. To run the app on a phone, see [Local development](docs/getting-started/local-development.md).
 
 ## Deploy
 

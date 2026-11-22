@@ -8,7 +8,7 @@ A free way to try CivicFix: the API and database on [Render](https://render.com)
 
 1. Merge the latest code into `main`.
 2. In Render: **New → Blueprint**, select this repository. Render reads `render.yaml` and proposes:
-   - `civicfix-api`: web service (Docker, `backend/`)
+   - `civicfix-api`: web service (Docker, `apps/api/`)
    - `civicfix-db`: PostgreSQL
 3. When asked for `CORS_ORIGINS`, **leave it empty for now** (you'll set it in step 4). The API starts without it; only the admin portal is blocked until it is set.
 4. Click **Apply** and wait for the deploy to finish.
@@ -25,7 +25,7 @@ Public sign-up only creates citizen accounts. Create staff/admin accounts from y
 2. Run:
 
 ```bash
-cd backend
+cd apps/api
 npm ci
 DATABASE_URL="<External Database URL>" DATABASE_SSL=true \
   npm run create-staff -- --email you@example.com --name "Your Name" --role admin
@@ -40,7 +40,7 @@ If the connection fails with a certificate error, add `DATABASE_SSL_REJECT_UNAUT
 ## Step 3: Admin portal on Vercel
 
 1. Vercel → **Add New → Project** → import this repository.
-2. **Root Directory:** `admin` (framework preset: Vite).
+2. **Root Directory:** `apps/admin` (framework preset: Vite).
 3. Environment variable:
 
 ```text

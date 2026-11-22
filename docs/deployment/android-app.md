@@ -34,19 +34,19 @@ Rebuild whenever the API URL changes, if you built it in. Changes to the API or 
 
 ## Alternative: Expo EAS Build
 
-`mobile/eas.json` still works if you prefer Expo's build service (needs an Expo account):
+`apps/mobile/eas.json` still works if you prefer Expo's build service (needs an Expo account):
 
 ```bash
-cd mobile
+cd apps/mobile
 npx eas env:set --name EXPO_PUBLIC_API_URL --value <API URL> --environment preview --visibility plaintext
 npx eas build --platform android --profile preview   # installable APK
 ```
 
 ## Versions and updates
 
-- The version name comes from `mobile/app.json` (`expo.version`). Raise it for user-visible releases and record the change in `CHANGELOG.md`.
+- The version name comes from `apps/mobile/app.json` (`expo.version`). Raise it for user-visible releases and record the change in `CHANGELOG.md`.
 - The workflow sets `versionCode` from the run number (`ANDROID_VERSION_CODE`), so every build installs over the previous one.
-- Citizens need a new APK only when `mobile/` changes or the built-in API address changes. API and admin portal changes are picked up without an app update.
+- Citizens need a new APK only when `apps/mobile/` changes or the built-in API address changes. API and admin portal changes are picked up without an app update.
 
 ## Server address
 

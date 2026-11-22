@@ -6,7 +6,7 @@ All automation runs on GitHub Actions. Workflows are in [`.github/workflows/`](.
 |---|---|---|---|
 | CivicFix CI | `ci.yml` | Every push to `main` and pull request | Tests, builds and lints every part |
 | End-to-end | `e2e.yml` | Every pull request; manually | Real browser and Android emulator tests |
-| Deploy to AWS | `deploy-aws.yml` | Push to `main` touching `backend/`, `admin/`, `infra/aws/`; manually | Deploys database, API and admin portal; optionally the APK |
+| Deploy to AWS | `deploy-aws.yml` | Push to `main` touching `apps/api/`, `apps/admin/`, `infra/aws/`; manually | Deploys database, API and admin portal; optionally the APK |
 | Android APK | `android-apk.yml` | Manually; tags `mobile-v*`; called by the deploy | Builds, launch-tests and publishes the signed APK |
 | AWS admin task | `aws-admin-task.yml` | Manually | One-off scripts inside AWS (create staff, prune photos) |
 
@@ -22,14 +22,14 @@ flowchart LR
 
 | Job | Steps |
 |---|---|
-| `backend` | PostgreSQL 17 service → `npm ci` → `node --check server.js` → `npm test` (unit + integration against `TEST_DATABASE_URL`) |
-| `admin` | `npm ci` → `npm run lint` → `npm run build` (with a placeholder `VITE_API_URL`) |
-| `mobile` | `npm ci` → `npx expo config --type public` (validates the Expo configuration) |
+| `apps/api` | PostgreSQL 17 service → `npm ci` → `node --check server.js` → `npm test` (unit + integration against `TEST_DATABASE_URL`) |
+| `apps/admin` | `npm ci` → `npm run lint` → `npm run build` (with a placeholder `VITE_API_URL`) |
+| `apps/mobile` | `npm ci` → `npx expo config --type public` (validates the Expo configuration) |
 | `infra` | `cfn-lint` on `infra/aws/*.yml` → `actionlint` on the workflows → `docker build` of the API image → checks the image starts and contains the RDS CA bundle |
 
 ## End-to-end (`e2e.yml`)
 
-Both jobs start PostgreSQL and the real API in production mode (`NODE_ENV=production`, short `ACCESS_TOKEN_TTL=30s`, `log` email/SMS providers, a fixed test SMS code), then seed data with `backend/test/e2e/seed.js`.
+Both jobs start PostgreSQL and the real API in production mode (`NODE_ENV=production`, short `ACCESS_TOKEN_TTL=30s`, `log` email/SMS providers, a fixed test SMS code), then seed data with `apps/api/test/e2e/seed.js`.
 
 | Job | What it does |
 |---|---|
@@ -43,7 +43,7 @@ On failure, screenshots, Playwright traces, device logs and the API log are uplo
 Skipped with a notice until the `AWS_DEPLOY_ROLE_ARN` variable exists.
 
 1. **check-setup** — is AWS configured?
-2. **test** — backend tests against a throwaway PostgreSQL.
+2. **test** — API tests against a throwaway PostgreSQL.
 3. **deploy** (signs in to AWS via OIDC):
    1. Finds the default VPC and subnets.
    2. Deploys `infra/aws/base.yml` as `civicfix-base` (RDS, secrets, ECR, S3 + CloudFront, IAM roles).
@@ -88,6 +88,6 @@ Runs a one-off ECS task using the API's current image, network and secrets, so i
 Settings → Branches → Add rule for `main`:
 
 - Require a pull request before merging (1 approval if there is more than one maintainer)
-- Require status checks: `backend`, `admin`, `mobile`, `infra`, `admin-portal`, `mobile-app`
+- Require status checks: `apps/api`, `apps/admin`, `apps/mobile`, `infra`, `admin-portal`, `mobile-app`
 - Require branches to be up to date before merging
 - Do not allow force pushes or deletions

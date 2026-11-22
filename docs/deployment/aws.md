@@ -50,7 +50,7 @@ Also add the four Android signing secrets (`ANDROID_KEYSTORE_BASE64`, `ANDROID_K
 1. Merge the latest code into `main`.
 2. GitHub → **Actions → Deploy to AWS → Run workflow** (keep "build and publish the Android app" ticked).
 3. The first run takes about 40–60 minutes (the database alone takes 10–15). It:
-   - runs the backend tests,
+   - runs the API tests,
    - creates the database, secrets, registry and admin hosting (`civicfix-base` stack),
    - builds and pushes the API image, and starts the API (`civicfix-api` stack),
    - waits until `/health` reports the database is OK and checks login and CORS,
@@ -58,14 +58,14 @@ Also add the four Android signing secrets (`ANDROID_KEYSTORE_BASE64`, `ANDROID_K
    - builds the Android app for the new API address, tests that it launches, and publishes it under **Releases**.
 4. The run's **Summary** page shows the API and admin portal addresses.
 
-After this, every push to `main` that changes `backend/`, `admin/` or `infra/aws/` redeploys automatically (without rebuilding the APK). The API address stays the same, so citizens don't need a new app unless the mobile code changes; rebuild it with **Actions → Android APK → Run workflow**.
+After this, every push to `main` that changes `apps/api/`, `apps/admin/` or `infra/aws/` redeploys automatically (without rebuilding the APK). The API address stays the same, so citizens don't need a new app unless the mobile code changes; rebuild it with **Actions → Android APK → Run workflow**.
 
 ## Step 4: Create your admin account
 
 The database is private, so accounts are created by a task that runs inside AWS:
 
 1. GitHub → **Actions → AWS admin task → Run workflow**.
-2. Task `create-staff`, your email and name, role `admin`. Run.
+2. Task `create-staff`, your email and name, role `apps/admin`. Run.
 3. When it finishes, open the AWS console → **Secrets Manager** → `civicfix/staff/<your email>` → **Retrieve secret value**. That's your password. It never appears in GitHub logs.
 4. Sign in at the admin portal address.
 

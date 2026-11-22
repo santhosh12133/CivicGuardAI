@@ -14,7 +14,7 @@ coverage/
 *.jks
 *.p12
 *.pem
-!backend/test/fixtures/*.pem
+!apps/api/test/fixtures/*.pem
 keystore.base64.txt
 
 # End-to-end test output

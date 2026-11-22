@@ -9,7 +9,7 @@ The three applications share one API contract and are released together by one s
 
 ## Decision
 
-Keep `backend/`, `admin/` and `mobile/` in one repository, each with its own `package.json` and lock file (no npm workspaces). Shared concerns (CI, end-to-end tests, infrastructure, documentation) live at the top level.
+Keep the API, admin portal and Android app in one repository, under `apps/api/`, `apps/admin/` and `apps/mobile/` (grouped under `apps/` in 2026-11), each with its own `package.json` and lock file (no npm workspaces). Shared concerns (CI, end-to-end tests, infrastructure, documentation) live at the top level.
 
 ## Alternatives considered
 

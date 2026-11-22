@@ -28,7 +28,7 @@ Only the latest release on `main` receives security fixes. Deployments should up
 
 ## Scope
 
-In scope: the code in this repository — the API (`backend/`), admin portal (`admin/`), Android app (`mobile/`), infrastructure templates (`infra/`) and CI workflows (`.github/`).
+In scope: the code in this repository — the API (`apps/api/`), admin portal (`apps/admin/`), Android app (`apps/mobile/`), infrastructure templates (`infra/`) and CI workflows (`.github/`).
 
 Out of scope: third-party services (AWS, Google, SMS carriers, OpenStreetMap Nominatim) and deployments operated by others; report those to their owners.
 

@@ -15,8 +15,8 @@
 
 <!-- Tests added or changed, and anything checked by hand (device, browser, deployment). -->
 
-- [ ] `npm test` in `backend/` passes (needs `TEST_DATABASE_URL`)
-- [ ] `npm run lint && npm run build` in `admin/` pass
+- [ ] `npm test` in `apps/api/` passes (needs `TEST_DATABASE_URL`)
+- [ ] `npm run lint && npm run build` in `apps/admin/` pass
 - [ ] End-to-end tests updated if a user journey changed (`e2e/`)
 
 ## Checklist

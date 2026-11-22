@@ -9,7 +9,7 @@ Email codes, SMS codes and Google sign-in need three external APIs. The AWS SDK 
 
 ## Decision
 
-Call SES v2 and SNS over HTTPS with a small, tested Signature Version 4 implementation (`backend/src/services/aws.js`), reading credentials from the ECS task role or environment. Verify Google ID tokens with Node's `crypto` against Google's published keys. Every provider is optional and reported by `GET /api/auth/providers`; outside production a `log` provider prints codes instead of sending them.
+Call SES v2 and SNS over HTTPS with a small, tested Signature Version 4 implementation (`apps/api/src/services/aws.js`), reading credentials from the ECS task role or environment. Verify Google ID tokens with Node's `crypto` against Google's published keys. Every provider is optional and reported by `GET /api/auth/providers`; outside production a `log` provider prints codes instead of sending them.
 
 ## Alternatives considered
 

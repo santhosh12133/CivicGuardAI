@@ -37,4 +37,4 @@ Package name `com.civicfix.app`, URL scheme `civicfix` (`app.json`).
 
 ## Building the APK
 
-Release APKs are built, launch-tested on an emulator and published by GitHub Actions — see [Android app releases](../docs/deployment/android-app.md). End-to-end flows: [`e2e/mobile`](../e2e/README.md).
+Release APKs are built, launch-tested on an emulator and published by GitHub Actions — see [Android app releases](../../docs/deployment/android-app.md). End-to-end flows: [`e2e/mobile`](../../e2e/README.md).

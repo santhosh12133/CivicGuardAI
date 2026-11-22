@@ -1,6 +1,6 @@
 # Evidence validation
 
-A report is only useful if its photo was really taken at that place, recently. When a citizen submits a report with a photo, the API checks the photo's embedded metadata before saving anything. Code: `createIssue` in [`backend/src/controllers/issueController.js`](../../backend/src/controllers/issueController.js), date rules in [`backend/src/utils/photoDate.js`](../../backend/src/utils/photoDate.js).
+A report is only useful if its photo was really taken at that place, recently. When a citizen submits a report with a photo, the API checks the photo's embedded metadata before saving anything. Code: `createIssue` in [`apps/api/src/controllers/issueController.js`](../../apps/api/src/controllers/issueController.js), date rules in [`apps/api/src/utils/photoDate.js`](../../apps/api/src/utils/photoDate.js).
 
 ## Pipeline
 
@@ -29,7 +29,7 @@ flowchart TD
   flag2 --> save
 ```
 
-Every rejection returns `400` with a `message` the app shows to the citizen, and the uploaded file is deleted from disk and from the `photos` table (`discardFileOnFailure` in `backend/src/middleware/upload.js`). Rejected photos are never stored or served.
+Every rejection returns `400` with a `message` the app shows to the citizen, and the uploaded file is deleted from disk and from the `photos` table (`discardFileOnFailure` in `apps/api/src/middleware/upload.js`). Rejected photos are never stored or served.
 
 ## Rules
 
@@ -88,4 +88,4 @@ These are deliberate trade-offs or open items. They are also listed in the [thre
 
 ## Testing
 
-`backend/test/integration/evidence.test.js` covers each rejection with real images (`test/fixtures/`, rewritten with ExifTool per test), stripped dates, future dates, distance, rejected-file clean-up and duplicates. `backend/test/unit/photoDate.test.js` covers timezone handling. The Android end-to-end flow `03-report-issue` submits a real camera-stamped photo through the whole pipeline.
+`apps/api/test/integration/evidence.test.js` covers each rejection with real images (`test/fixtures/`, rewritten with ExifTool per test), stripped dates, future dates, distance, rejected-file clean-up and duplicates. `apps/api/test/unit/photoDate.test.js` covers timezone handling. The Android end-to-end flow `03-report-issue` submits a real camera-stamped photo through the whole pipeline.

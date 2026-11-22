@@ -4,9 +4,9 @@ Every setting CivicFix reads, where it is set, and its default. Secrets are mark
 
 | Where | Set through |
 |---|---|
-| API | Environment variables. Locally `backend/.env` (copy [`backend/.env.example`](../../backend/.env.example)); on AWS the `civicfix-api` stack (from repository variables) and Secrets Manager; on Render the dashboard / `render.yaml` |
-| Admin portal | `VITE_*` variables at **build** time (`admin/.env`, Vercel, or the deploy workflow) |
-| Android app | `EXPO_PUBLIC_*` variables at **build** time (`mobile/.env` or the APK workflow) |
+| API | Environment variables. Locally `apps/api/.env` (copy [`apps/api/.env.example`](../../apps/api/.env.example)); on AWS the `civicfix-api` stack (from repository variables) and Secrets Manager; on Render the dashboard / `render.yaml` |
+| Admin portal | `VITE_*` variables at **build** time (`apps/admin/.env`, Vercel, or the deploy workflow) |
+| Android app | `EXPO_PUBLIC_*` variables at **build** time (`apps/mobile/.env` or the APK workflow) |
 | GitHub Actions | Repository **variables** and **secrets** (Settings → Secrets and variables → Actions) |
 
 ## API

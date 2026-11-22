@@ -1,6 +1,6 @@
 name: AWS admin task
 
-# Runs a one-off backend script inside AWS, next to the private database,
+# Runs a one-off API script inside AWS, next to the private database,
 # using the same image and settings as the deployed API.
 #
 #   create-staff   create or reset a staff/admin account. The generated

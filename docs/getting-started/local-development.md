@@ -19,7 +19,7 @@ ExifTool is bundled with the API's `exiftool-vendored` dependency; nothing to in
 ```bash
 git clone https://github.com/santhosh12133/CivicGuardAI.git
 cd CivicGuardAI
-npm run install:all          # npm ci in backend/, admin/ and mobile/
+npm run install:all          # npm ci in apps/api, apps/admin and apps/mobile
 ```
 
 ## 2. Database
@@ -36,7 +36,7 @@ Tables are created automatically when the API starts in development.
 ## 3. API
 
 ```bash
-cd backend
+cd apps/api
 cp .env.example .env
 ```
 
@@ -66,7 +66,7 @@ Email and SMS codes (forgot password, phone sign-in) are printed in this termina
 ## 4. Admin portal
 
 ```bash
-cd admin
+cd apps/admin
 cp .env.example .env         # VITE_API_URL=http://localhost:5000/api
 npm run dev                  # http://localhost:5173
 ```
@@ -76,7 +76,7 @@ Sign in with the account from step 3.
 ## 5. Android app
 
 ```bash
-cd mobile
+cd apps/mobile
 cp .env.example .env
 # EXPO_PUBLIC_API_URL=http://<your computer's LAN IP>:5000   (not localhost: the phone can't reach it)
 npm start
@@ -89,7 +89,7 @@ To report an issue you need a photo **taken in the last 24 hours, near your curr
 ## 6. Tests
 
 ```bash
-cd backend
+cd apps/api
 npm run test:unit
 TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/civicguard_test npm test
 ```
@@ -100,16 +100,16 @@ TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/civicguard_test np
 
 1. Branch from `main`: `git switch -c feat/short-description`.
 2. Make the change with tests ([CONTRIBUTING.md](../../CONTRIBUTING.md)).
-3. `npm test` in `backend/`; `npm run lint && npm run build` in `admin/` if you touched it.
+3. `npm test` in `apps/api/`; `npm run lint && npm run build` in `apps/admin/` if you touched it.
 4. Push and open a pull request; CI and the end-to-end suites run automatically.
 
 ## Common problems
 
 | Symptom | Fix |
 |---|---|
-| API exits with `JWT_SECRET must be configured with at least 32 characters` | Set a long `JWT_SECRET` in `backend/.env` |
+| API exits with `JWT_SECRET must be configured with at least 32 characters` | Set a long `JWT_SECRET` in `apps/api/.env` |
 | `ECONNREFUSED 127.0.0.1:5432` | PostgreSQL isn't running: `docker start civicfix-db` |
-| Portal shows a CORS error | `CORS_ORIGINS` in `backend/.env` must be exactly `http://localhost:5173` |
+| Portal shows a CORS error | `CORS_ORIGINS` in `apps/api/.env` must be exactly `http://localhost:5173` |
 | App says *Cannot connect to server* | Use your LAN IP, not `localhost`; phone and computer on the same network; firewall allows port 5000 |
 | Photos don't load on the phone | Set `API_HOST` to `<LAN IP>:5000` and restart the API |
 | *Photo is older than 24 hours* | Take a new photo with the camera |

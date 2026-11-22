@@ -36,16 +36,16 @@ flowchart LR
 
 | Component | Location | Responsibility |
 |---|---|---|
-| API | [`backend/`](../../backend/README.md) | Accounts and sessions, issue lifecycle, evidence checks, photo storage and serving, statistics |
-| Admin portal | [`admin/`](../../admin/README.md) | Staff triage issues, change status/category, add notes and resolution photos; admins manage staff |
-| Android app | [`mobile/`](../../mobile/README.md) | Citizens sign up, report issues with a photo and location, follow their reports |
+| API | [`apps/api/`](../../apps/api/README.md) | Accounts and sessions, issue lifecycle, evidence checks, photo storage and serving, statistics |
+| Admin portal | [`apps/admin/`](../../apps/admin/README.md) | Staff triage issues, change status/category, add notes and resolution photos; admins manage staff |
+| Android app | [`apps/mobile/`](../../apps/mobile/README.md) | Citizens sign up, report issues with a photo and location, follow their reports |
 | Infrastructure | [`infra/aws/`](../../infra/aws/README.md) | CloudFormation templates for AWS |
 | End-to-end tests | [`e2e/`](../../e2e/README.md) | Playwright (portal) and Maestro (Android) suites |
 
 ### API internals
 
 ```text
-backend/
+apps/api/
 ├── server.js              start-up: config checks, DB connect, schema sync, listen
 └── src/
     ├── app.js             Express app: middleware order, routes, /uploads, /health

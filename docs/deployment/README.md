@@ -4,9 +4,9 @@ CivicFix has three deployable parts:
 
 | Part | What it is | Built from |
 |---|---|---|
-| **API** | Node.js/Express service with PostgreSQL; also stores and serves photos | `backend/` (Docker image) |
-| **Admin portal** | Static React site for staff and admins | `admin/` (`npm run build`) |
-| **Android app** | APK for citizens, published under GitHub **Releases** | `mobile/` (Expo prebuild + Gradle) |
+| **API** | Node.js/Express service with PostgreSQL; also stores and serves photos | `apps/api/` (Docker image) |
+| **Admin portal** | Static React site for staff and admins | `apps/admin/` (`npm run build`) |
+| **Android app** | APK for citizens, published under GitHub **Releases** | `apps/mobile/` (Expo prebuild + Gradle) |
 
 ## Choose a hosting option
 

@@ -51,7 +51,7 @@ fields @timestamp, @message
 | Task | How |
 |---|---|
 | Add a staff member | Admin portal → **Staff** → Add. Share the one-time password privately; they change it after signing in |
-| First admin, or recover admin access | GitHub → Actions → **AWS admin task** → `create-staff` with role `admin`. Password: Secrets Manager → `civicfix/staff/<email>` |
+| First admin, or recover admin access | GitHub → Actions → **AWS admin task** → `create-staff` with role `apps/admin`. Password: Secrets Manager → `civicfix/staff/<email>` |
 | Reset someone's password | Admin portal → Staff → Reset password (signs them out everywhere) |
 | Remove staff access | Admin portal → Staff → change role to `citizen` |
 | Citizen locked out | They wait 15 minutes, or use *Forgot password*, or an admin resets the password |
@@ -61,7 +61,7 @@ Review staff and admin accounts every quarter and demote people who no longer ne
 
 ## Deploying
 
-- **Normal path:** merge a pull request into `main`; changes under `backend/`, `admin/` or `infra/aws/` deploy automatically. Watch GitHub → Actions → *Deploy to AWS*.
+- **Normal path:** merge a pull request into `main`; changes under `apps/api/`, `apps/admin/` or `infra/aws/` deploy automatically. Watch GitHub → Actions → *Deploy to AWS*.
 - **Re-run a deploy / build the APK:** Actions → *Deploy to AWS* → Run workflow.
 - **Roll back:** revert the commit on `main` (GitHub → the merged PR → **Revert**), merge the revert. See [Deployment → Rolling back](../deployment/README.md#rolling-back).
 - **Restart the API without a code change** (e.g. after changing a secret): ECS → Clusters → `civicfix` → `civicfix-api` → **Update service** → *Force new deployment*, or:
@@ -103,6 +103,6 @@ Review staff and admin accounts every quarter and demote people who no longer ne
 | Task | How |
 |---|---|
 | Logs | Render → `civicfix-api` → Logs |
-| Create staff | `DATABASE_URL="<External Database URL>" DATABASE_SSL=true npm run create-staff -- …` from `backend/` |
+| Create staff | `DATABASE_URL="<External Database URL>" DATABASE_SSL=true npm run create-staff -- …` from `apps/api/` |
 | Restart | Render → Manual Deploy → *Deploy latest commit* |
 | Back up before the free database expires | `pg_dump "<External Database URL>" -Fc -f civicfix.dump` |

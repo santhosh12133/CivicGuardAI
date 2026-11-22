@@ -1,6 +1,6 @@
 # Data model
 
-All data lives in one PostgreSQL database (version 17 on AWS). Models are defined with Sequelize in [`backend/src/models/`](../../backend/src/models); column names are `snake_case`, primary keys are UUIDs unless noted.
+All data lives in one PostgreSQL database (version 17 on AWS). Models are defined with Sequelize in [`apps/api/src/models/`](../../apps/api/src/models); column names are `snake_case`, primary keys are UUIDs unless noted.
 
 ```mermaid
 erDiagram
@@ -87,7 +87,7 @@ erDiagram
 | `phone` | string(20), unique, nullable | E.164, e.g. `+919876543210` |
 | `google_id` | string(64), unique, nullable | Google's `sub`; set on first Google sign-in |
 | `password` | string, nullable | bcrypt hash. Null for phone/Google accounts until they set one |
-| `role` | enum `citizen`, `staff`, `admin` | Default `citizen` |
+| `role` | enum `citizen`, `staff`, `apps/admin` | Default `citizen` |
 | `failed_logins` | integer | Consecutive wrong passwords; reset on success |
 | `locked_until` | timestamp, nullable | Set for 15 minutes after five wrong passwords |
 | `created_at`, `updated_at` | timestamp | |
@@ -111,7 +111,7 @@ Every account has at least one way to sign in: an email with a password, a phone
 | `user_id` | UUID FK → `users`, nullable | Reporter. `ON DELETE SET NULL` keeps the issue if the account is removed |
 | `created_at` | timestamp | No `updated_at`; changes are recorded in `issue_updates` |
 
-Categories (`backend/src/constants/categories.js`, served at `GET /api/issues/categories`): `pothole`, `road_damage`, `streetlight`, `garbage`, `water_supply`, `drainage`, `traffic_signal`, `fallen_tree`, `other`.
+Categories (`apps/api/src/constants/categories.js`, served at `GET /api/issues/categories`): `pothole`, `road_damage`, `streetlight`, `garbage`, `water_supply`, `drainage`, `traffic_signal`, `fallen_tree`, `other`.
 
 ### `issue_updates`
 
@@ -164,7 +164,7 @@ Indexed on `(purpose, target)`. Old rows are harmless; they can be deleted perio
 
 ## Schema changes
 
-There is no separate migration tool. On start-up (`backend/src/config/schema.js`, when not in production or when `DB_SYNC=true`) the API:
+There is no separate migration tool. On start-up (`apps/api/src/config/schema.js`, when not in production or when `DB_SYNC=true`) the API:
 
 1. Creates missing tables (`sequelize.sync()`, which never alters existing tables).
 2. Adds any column a model has but the table lacks, using the model's default for existing rows.
@@ -174,7 +174,7 @@ It never drops, renames or narrows columns. Rules for contributors:
 
 - Only **add** columns, and give new non-null columns a default.
 - To rename or remove a column, add the new one, ship code that uses it, migrate data with a one-off script, and only then drop the old one by hand in a later release.
-- Add an integration test in `backend/test/integration/schema.test.js` for upgrades from an older schema.
+- Add an integration test in `apps/api/test/integration/schema.test.js` for upgrades from an older schema.
 
 ## Data retention
 

@@ -7,20 +7,20 @@ How CivicFix is tested, what each suite covers, and how to run it.
 | Layer | Tool | Where | Runs | Needs |
 |---|---|---|---|---|
 | Static checks | `node --check`, ESLint, `expo config`, `cfn-lint`, `actionlint` | CI `ci.yml` | Every push / PR | — |
-| Unit | `node:test` | `backend/test/unit/` | Every push / PR | Nothing |
-| API integration | `node:test` + `fetch` against a real server | `backend/test/integration/` | Every push / PR | Disposable PostgreSQL |
+| Unit | `node:test` | `apps/api/test/unit/` | Every push / PR | Nothing |
+| API integration | `node:test` + `fetch` against a real server | `apps/api/test/integration/` | Every push / PR | Disposable PostgreSQL |
 | Container | `docker build` + start check | CI `infra` job | Every push / PR | Docker |
 | Admin portal end-to-end | Playwright (Chromium) | `e2e/admin/` | Every PR | API + PostgreSQL |
 | Android end-to-end | Maestro on an API 34 emulator | `e2e/mobile/` | Every PR | API + PostgreSQL + emulator |
 | APK launch test | `adb` on an emulator | `android-apk.yml` | Every APK build | Emulator |
 | Deployment smoke test | `curl` health, sign-in, CORS | `deploy-aws.yml` | Every deploy | Deployed API |
 
-The backend tests use only Node's built-in test runner and `fetch`: no Jest/Mocha, no mocks of the database. Integration tests start the real Express app on a random port against a real PostgreSQL database.
+The API tests use only Node's built-in test runner and `fetch`: no Jest/Mocha, no mocks of the database. Integration tests start the real Express app on a random port against a real PostgreSQL database.
 
-## Running the backend tests
+## Running the API tests
 
 ```bash
-cd backend
+cd apps/api
 npm run test:unit                      # no database needed
 
 # Integration tests need a DISPOSABLE database; every table is dropped and recreated.
@@ -54,7 +54,7 @@ Evidence tests stamp the fixture images in `test/fixtures/` with EXIF dates and 
 
 ## End-to-end tests
 
-`.github/workflows/e2e.yml` runs on every pull request. Both jobs start the real API on a fresh PostgreSQL database and seed it through the public API with `backend/test/e2e/seed.js` (two citizens, three issues in different categories, one with a real camera-stamped photo, and a staff note).
+`.github/workflows/e2e.yml` runs on every pull request. Both jobs start the real API on a fresh PostgreSQL database and seed it through the public API with `apps/api/test/e2e/seed.js` (two citizens, three issues in different categories, one with a real camera-stamped photo, and a staff note).
 
 **Admin portal** (`e2e/admin`, Playwright, Chromium): citizen and wrong-password sign-in refused; Overview statistics and links into filtered lists; issue list category/reporter columns, filters, search and needs-review; deep-link refresh; issue page reporter, photo and timeline; status, category and note updates; resolving with a resolution photo; statistics updating; adding staff with a one-time password; a staff member's restricted view and password change; role changes and password reset; deleting issues; forgot password with the emailed code (read from the API log); a session renewing itself after the access token expires (`ACCESS_TOKEN_TTL=30s`); sign-out ending the server session; account lockout after five wrong passwords; sign-out.
 
@@ -64,7 +64,7 @@ Failures upload screenshots, traces, device logs and the API log as workflow art
 
 ### Defects found by the end-to-end tests
 
-- **Android photo uploads always failed** with "Cannot connect to server". axios labelled the report's `FormData` as `application/x-www-form-urlencoded`, and React Native's Android networking refused to encode it (`multipart != application/x-www-form-urlencoded`). Fixed in `mobile/src/utils/api.js`; the emulator flow `03-report-issue` now submits a real gallery photo through the evidence checks.
+- **Android photo uploads always failed** with "Cannot connect to server". axios labelled the report's `FormData` as `application/x-www-form-urlencoded`, and React Native's Android networking refused to encode it (`multipart != application/x-www-form-urlencoded`). Fixed in `apps/mobile/src/utils/api.js`; the emulator flow `03-report-issue` now submits a real gallery photo through the evidence checks.
 - **The rate limit (120 requests/minute per IP) was too low** for several staff sharing an office connection; it is now 300 and configurable (`RATE_LIMIT_MAX`).
 
 ### Evidence gaps closed by this suite
@@ -90,7 +90,7 @@ export EMAIL_PROVIDER=log SMS_PROVIDER=log ACCESS_TOKEN_TTL=30s
 export TEST_OTP_PHONE=+919999900001 TEST_OTP_CODE=246810
 
 # 1. API (production mode, like CI), admin account and seed data
-cd backend && npm ci
+cd apps/api && npm ci
 STAFF_PASSWORD="$ADMIN_PASSWORD" node scripts/create-staff-user.js --email "$ADMIN_EMAIL" --name "E2E Admin" --role admin
 NODE_ENV=production DB_SYNC=true CORS_ORIGINS=http://localhost:4173 node server.js > /tmp/api.log 2>&1 &
 API_URL=http://localhost:5000 SEED_OUT=/tmp/seed.json node test/e2e/seed.js
@@ -100,7 +100,7 @@ cd ../admin && npm ci && VITE_API_URL=http://localhost:5000/api npm run build
 npx vite preview --port 4173 --strictPort &
 
 # 3. Playwright
-cd ../e2e/admin && npm ci && npx playwright install chromium
+cd ../../e2e/admin && npm ci && npx playwright install chromium
 SEED_FILE=/tmp/seed.json API_LOG=/tmp/api.log npm test
 ```
 
@@ -119,7 +119,7 @@ Use a fresh database for every run: the suite changes passwords and deletes issu
 
 A pull request can be merged when:
 
-- [ ] CI (`backend`, `admin`, `mobile`, `infra`) and End-to-end (`admin-portal`, `mobile-app`) pass
+- [ ] CI (`apps/api`, `apps/admin`, `apps/mobile`, `infra`) and End-to-end (`admin-portal`, `mobile-app`) pass
 - [ ] New behaviour has tests at the lowest layer that can catch it
 - [ ] The documentation listed in the pull request template is updated
 

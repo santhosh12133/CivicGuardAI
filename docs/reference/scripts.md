@@ -6,7 +6,7 @@ Convenience wrappers; each app keeps its own `package.json` and lock file.
 
 | Command | Does |
 |---|---|
-| `npm run install:all` | `npm ci` in `backend/`, `admin/` and `mobile/` |
+| `npm run install:all` | `npm ci` in `apps/api/`, `apps/admin/` and `apps/mobile/` |
 | `npm run dev:api` | API with auto-reload on <http://localhost:5000> |
 | `npm run dev:admin` | Admin portal on <http://localhost:5173> |
 | `npm run dev:mobile` | Expo dev server for the Android app |
@@ -16,7 +16,7 @@ Convenience wrappers; each app keeps its own `package.json` and lock file.
 | `npm run build:admin` | Production build of the admin portal (needs `VITE_API_URL`) |
 | `npm run e2e:admin` | Playwright suite (needs a running API and built portal, see [Testing](../testing/strategy.md#running-end-to-end-tests-locally)) |
 
-## API (`backend/`)
+## API (`apps/api/`)
 
 | Command | Does |
 |---|---|
@@ -38,7 +38,7 @@ All database scripts use the same settings as the API (`DATABASE_URL` or `DB_*`,
 DATABASE_URL="<external URL>" DATABASE_SSL=true npm run view-users
 ```
 
-## Admin portal (`admin/`)
+## Admin portal (`apps/admin/`)
 
 | Command | Does |
 |---|---|
@@ -47,7 +47,7 @@ DATABASE_URL="<external URL>" DATABASE_SSL=true npm run view-users
 | `npm run preview` | Serve the built `dist/` locally |
 | `npm run lint` | ESLint |
 
-## Android app (`mobile/`)
+## Android app (`apps/mobile/`)
 
 | Command | Does |
 |---|---|
