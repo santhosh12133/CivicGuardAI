@@ -74,19 +74,6 @@ const IssueDetailScreen = ({ navigation }) => {
       setError(null);
       const { data } = await api.get(`/api/issues/${issueId}`);
       const issueData = data.issue || data;
-      // Debug: Log the photo_url to verify it's in the response
-      console.log(
-        "Issue data:",
-        JSON.stringify(
-          {
-            id: issueData.id,
-            photo_url: issueData.photo_url,
-            resolved_photo_url: issueData.resolved_photo_url,
-          },
-          null,
-          2
-        )
-      );
       setIssue(issueData);
     } catch (err) {
       setError(err.message || "Failed to load issue details");
@@ -163,9 +150,6 @@ const IssueDetailScreen = ({ navigation }) => {
               source={{ uri: normalizeUrl(issue.photo_url) }}
               style={styles.issueImage}
               resizeMode="contain"
-              onError={(e) =>
-                console.log("Image load error:", e.nativeEvent.error)
-              }
             />
           </Card.Content>
         </Card>

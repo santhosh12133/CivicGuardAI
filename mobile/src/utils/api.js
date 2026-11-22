@@ -40,13 +40,10 @@ const applyBaseUrl = (url) => {
   api.defaults.baseURL = url || undefined;
 };
 
-// Wakes a sleeping server early and makes connectivity visible in device logs.
+// Wakes a sleeping server (e.g. Render's free tier) before the user needs it.
 const warmUp = () => {
   if (!baseUrl) return;
-  api
-    .get("/health")
-    .then((res) => console.log("[api] health ok", res.data))
-    .catch((err) => console.log("[api] health check failed", err.message || err));
+  api.get("/health").catch(() => {});
 };
 
 /** Loads the saved server address (if any). Call once at start-up. */
@@ -57,7 +54,6 @@ export const loadSavedServer = async () => {
   } catch (error) {
     console.warn("Failed to load server address", error);
   }
-  console.log("Using backend at:", baseUrl || "(not set)");
   warmUp();
   return baseUrl;
 };

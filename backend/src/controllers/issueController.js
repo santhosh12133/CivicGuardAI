@@ -23,22 +23,8 @@ const { getDistance } = require('geolib');
 
 const createIssue = async (req, res, next) => {
   try {
-    console.log('=== CREATE ISSUE REQUEST ===');
-    console.log('Body:', req.body);
-    console.log(
-      'File:',
-      req.file
-        ? { filename: req.file.filename, size: req.file.size }
-        : 'No file'
-    );
-    console.log('Headers:', {
-      'content-type': req.headers['content-type'],
-      authorization: req.headers['authorization'] ? 'Present' : 'Missing',
-    });
-
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      console.log('Validation errors:', errors.array());
       return res.status(400).json({ errors: errors.array() });
     }
 
@@ -48,15 +34,6 @@ const createIssue = async (req, res, next) => {
     // Convert latitude and longitude to numbers if they're strings
     let lat = parseFloat(latitude);
     let lon = parseFloat(longitude);
-
-    console.log('Location data received:', {
-      latitudeRaw: latitude,
-      longitudeRaw: longitude,
-      latitudeParsed: lat,
-      longitudeParsed: lon,
-      latitudeValid: !isNaN(lat),
-      longitudeValid: !isNaN(lon),
-    });
 
     // Validate location coordinates
     if (
@@ -88,12 +65,10 @@ const createIssue = async (req, res, next) => {
         req.headers['x-forwarded-proto'] ||
         'http';
       photoUrl = `${protocol}://${host}/uploads/${req.file.filename}`;
-      console.log('File uploaded:', { filename: req.file.filename, photoUrl });
     } else if (req.body.photo_url) {
       // Fallback to photo_url if provided (for backward compatibility)
       photoUrl = req.body.photo_url;
     }
-    console.log('photoUrl final:', photoUrl);
 
     // Flag to mark issues that require manual review (e.g. when EXIF GPS is missing)
     let needs_review = false;
@@ -109,12 +84,11 @@ const createIssue = async (req, res, next) => {
     try {
       if (latitude && longitude) {
         address = await reverseGeocode(latitude, longitude);
-        console.log('📍 Address resolved:', address);
       }
     } catch (geocodeError) {
       // Even if geocoding fails, we have the coordinates
       // The geocoding function already returns a fallback, but handle errors here
-      console.warn('⚠️  Geocoding error:', geocodeError.message);
+      console.warn('Reverse geocoding failed:', geocodeError.message);
       address = null; // Will be set by reverseGeocode function
     }
     if (req.file) {
@@ -133,13 +107,6 @@ const createIssue = async (req, res, next) => {
 
         // ========== EXIF VALIDATION ==========
         // Accept camera photos (with Make/Model) or gallery photos (without Make/Model)
-        console.log('📸 EXIF validation:');
-        console.log(`   - Has EXIF data: ${!!exif}`);
-        console.log(`   - EXIF keys: ${Object.keys(exif).length}`);
-        console.log(`   - Camera Make: ${exif.Make || 'N/A'}`);
-        console.log(`   - Camera Model: ${exif.Model || 'N/A'}`);
-        console.log(`   - DateTimeOriginal: ${exif.DateTimeOriginal || 'N/A'}`);
-        console.log(`   - GPS Fields: ${gpsFields.length > 0 ? 'YES' : 'NO'}`);
 
         // 1. REJECT if no EXIF data or only has minimal/generic fields
         // Check for meaningful EXIF data - at least one of: Make/Model (camera), DateTimeOriginal, GPS
@@ -150,13 +117,6 @@ const createIssue = async (req, res, next) => {
           hasMakeOrModel || hasDateTimeOriginal || hasGPS;
 
         if (!exif || Object.keys(exif).length === 0 || !hasSignificantExif) {
-          console.log('❌ EXIF validation failed:', {
-            hasMakeOrModel,
-            hasDateTimeOriginal,
-            hasGPS,
-            hasSignificantExif,
-            exifKeyCount: Object.keys(exif).length,
-          });
           return res.status(400).json({
             message:
               'Photo has no camera metadata. Please capture a new photo directly with your device camera or select from your device photo which has accurate location information.',
@@ -178,9 +138,6 @@ const createIssue = async (req, res, next) => {
         }
 
         const age = checkPhotoAge(capture);
-        console.log(
-          `   - Captured (${capture.tag}${capture.zoneKnown ? '' : ', no timezone'}): ${capture.date.toISOString()}`
-        );
 
         // 3. REJECT if older than 24 hours or dated in the future
         if (!age.ok && age.reason === 'stale') {
@@ -207,15 +164,6 @@ const createIssue = async (req, res, next) => {
         let gpsRef = { lat: 'N', lon: 'E' };
         let hasEmbeddedGPS = false;
 
-        console.log('📍 GPS EXIF fields:', {
-          GPSLatitude: exif.GPSLatitude,
-          GPSLongitude: exif.GPSLongitude,
-          GPSLatitudeRef: exif.GPSLatitudeRef,
-          GPSLongitudeRef: exif.GPSLongitudeRef,
-          GPSPosition: exif.GPSPosition,
-          allGpsKeys: Object.keys(exif).filter((k) => k.includes('GPS')),
-        });
-
         // Try multiple ways to extract GPS from EXIF
         // Method 1: Direct GPS fields (usually works)
         if (
@@ -229,7 +177,6 @@ const createIssue = async (req, res, next) => {
           gpsRef.lat = exif.GPSLatitudeRef || 'N';
           gpsRef.lon = exif.GPSLongitudeRef || 'E';
           hasEmbeddedGPS = true;
-          console.log('   📍 Method 1: GPS found in direct EXIF fields');
         }
         // Method 2: GPSPosition string (sometimes used)
         else if (exif.GPSPosition && typeof exif.GPSPosition === 'string') {
@@ -238,16 +185,11 @@ const createIssue = async (req, res, next) => {
             exifLat = coords[0];
             exifLon = coords[1];
             hasEmbeddedGPS = true;
-            console.log('   📍 Method 2: GPS position found in string format');
           }
         }
         // Method 3: Check if there are ANY GPS fields present (indicates location was recorded)
         // In this case, use device location as it's more reliable
         else if (Object.keys(exif).some((k) => k.startsWith('GPS'))) {
-          console.log(
-            '   📍 Method 3: GPS fields exist but coordinates are unreadable (likely binary format)'
-          );
-          console.log('   📍 Using device location as fallback');
           exifLat = lat;
           exifLon = lon;
           hasEmbeddedGPS = true; // Mark as having GPS info even though we're using device location
@@ -258,9 +200,6 @@ const createIssue = async (req, res, next) => {
 
         // 4. If no EXIF GPS at all, use device location (for gallery photos)
         if (!hasEmbeddedGPS) {
-          console.log(
-            '   📍 No GPS fields found - using device location as fallback'
-          );
           exifLat = deviceLatNum;
           exifLon = deviceLonNum;
         }
@@ -272,10 +211,6 @@ const createIssue = async (req, res, next) => {
         if (Array.isArray(exifLat)) {
           // GPS format: [degrees, minutes, seconds]
           exifLatNum = exifLat[0] + exifLat[1] / 60 + exifLat[2] / 3600;
-          console.log('   📍 Converted array GPS latitude:', {
-            exifLat,
-            exifLatNum,
-          });
         } else {
           exifLatNum = Number(exifLat);
         }
@@ -283,10 +218,6 @@ const createIssue = async (req, res, next) => {
         if (Array.isArray(exifLon)) {
           // GPS format: [degrees, minutes, seconds]
           exifLonNum = exifLon[0] + exifLon[1] / 60 + exifLon[2] / 3600;
-          console.log('   📍 Converted array GPS longitude:', {
-            exifLon,
-            exifLonNum,
-          });
         } else {
           exifLonNum = Number(exifLon);
         }
@@ -294,13 +225,6 @@ const createIssue = async (req, res, next) => {
         // Apply GPS reference directions (N/S, E/W)
         if (gpsRef.lat === 'S') exifLatNum *= -1;
         if (gpsRef.lon === 'W') exifLonNum *= -1;
-
-        console.log('   📍 Final GPS values:', {
-          exifLatNum,
-          exifLonNum,
-          deviceLatNum,
-          deviceLonNum,
-        });
 
         // 5. REJECT if GPS coordinates are invalid
         if (
@@ -320,8 +244,6 @@ const createIssue = async (req, res, next) => {
           { latitude: deviceLatNum, longitude: deviceLonNum }
         );
 
-        console.log(`   📍 GPS distance: ${distanceMeters.toFixed(0)}m`);
-
         // 6. REJECT if photo location is more than 200m from device location
         if (distanceMeters > 200) {
           return res.status(400).json({
@@ -333,7 +255,7 @@ const createIssue = async (req, res, next) => {
           });
         }
       } catch (exifErr) {
-        console.error('⚠️  EXIF read error:', exifErr.message);
+        console.warn('Could not read photo metadata:', exifErr.message);
         return res.status(400).json({
           message:
             'Unable to read photo metadata. Please capture a new photo with your device camera.',
@@ -350,9 +272,7 @@ const createIssue = async (req, res, next) => {
           req.file.path ||
           path.join(__dirname, '../../uploads', req.file.filename);
 
-        console.log('🔍 Computing pHash for:', req.file.filename);
         phash = await computePHash(uploadedPath);
-        console.log('📊 pHash computed:', phash);
 
         // Fetch all existing pHashes from the database
         const existingIssues = await Issue.findAll({
@@ -369,24 +289,12 @@ const createIssue = async (req, res, next) => {
         );
 
         if (similarImages.length > 0) {
-          console.warn(
-            '⚠️  DUPLICATE ALERT: Image is similar to',
-            similarImages.length,
-            'existing image(s):'
-          );
-          similarImages.forEach((img) => {
-            console.warn(
-              `   - Issue ${img.id}: ${img.similarity.toFixed(1)}% similarity`
-            );
-          });
-
           // Mark for manual review instead of blocking
           needs_review = true;
-          console.log('🚩 Issue marked for review due to image similarity');
         }
       } catch (phashErr) {
         // If pHash computation fails, log but don't block the upload
-        console.warn('⚠️  pHash computation failed:', phashErr.message);
+        console.warn('Could not compute photo hash:', phashErr.message);
         // We don't set needs_review here - let EXIF validation handle it
       }
     }
@@ -419,12 +327,9 @@ const createIssue = async (req, res, next) => {
       to_status: 'Open',
     });
 
-    console.log('✅ Issue created successfully:', issue.id);
     const created = await Issue.findByPk(issue.id, { include: detailIncludes, order: detailOrder });
     return res.status(201).json(serializeIssue(created, req.user));
   } catch (error) {
-    console.error('❌ CREATE ISSUE ERROR:', error.message);
-    console.error('Stack:', error.stack);
     return next(error);
   }
 };

@@ -37,7 +37,6 @@ const cleanCache = () => {
       geocodingCache.delete(key);
       deleted++;
     }
-    console.log(`🗑️  Geocoding cache cleared ${deleted} old entries`);
   }
 };
 
@@ -67,7 +66,6 @@ const reverseGeocode = async (latitude, longitude, retries = 2) => {
   const cacheKey = getCacheKey(lat, lon);
   if (geocodingCache.has(cacheKey)) {
     const cached = geocodingCache.get(cacheKey);
-    console.log(`✓ Geocoding cache hit for ${cacheKey}`);
     return cached.address;
   }
 
