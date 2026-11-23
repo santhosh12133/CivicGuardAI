@@ -48,12 +48,16 @@ const tabOptions = ({ route }) => ({
   ),
 });
 
+// An explicit label, so screen readers (and the tests) read "My reports"
+// rather than the icon glyph followed by the label.
+const tab = (title, testID) => ({ title, tabBarAccessibilityLabel: title, tabBarButtonTestID: testID });
+
 const MainTabs = () => (
   <Tab.Navigator screenOptions={tabOptions}>
-    <Tab.Screen name="Home" component={HomeScreen} options={{ title: "Home" }} />
-    <Tab.Screen name="Report" component={ReportScreen} options={{ title: "Report" }} />
-    <Tab.Screen name="MyReports" component={MyReportsScreen} options={{ title: "My reports" }} />
-    <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: "Profile" }} />
+    <Tab.Screen name="Home" component={HomeScreen} options={tab("Home", "tab-home")} />
+    <Tab.Screen name="Report" component={ReportScreen} options={tab("Report", "tab-report")} />
+    <Tab.Screen name="MyReports" component={MyReportsScreen} options={tab("My reports", "tab-my-reports")} />
+    <Tab.Screen name="Profile" component={ProfileScreen} options={tab("Profile", "tab-profile")} />
   </Tab.Navigator>
 );
 

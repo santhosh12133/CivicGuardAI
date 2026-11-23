@@ -21,7 +21,8 @@ name: A citizen reports a new issue with a gallery photo
 - extendedWaitUntil:
     visible: "Hello, Asha"
     timeout: 60000
-- tapOn: "Report"
+- tapOn:
+    id: "tab-report"
 - extendedWaitUntil:
     visible: "Report a problem"
     timeout: 30000

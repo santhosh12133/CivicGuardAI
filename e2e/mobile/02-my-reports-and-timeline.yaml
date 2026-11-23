@@ -19,7 +19,8 @@ name: A citizen follows their own report and sees staff updates
 - extendedWaitUntil:
     visible: "Hello, Asha"
     timeout: 60000
-- tapOn: "My reports"
+- tapOn:
+    id: "tab-my-reports"
 - extendedWaitUntil:
     visible: "2 reports you have made.*"
     timeout: 30000

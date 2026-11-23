@@ -20,7 +20,8 @@ name: A citizen sees the city team's resolution photo on a fixed report
 - extendedWaitUntil:
     visible: "Hello, Ravi"
     timeout: 60000
-- tapOn: "My reports"
+- tapOn:
+    id: "tab-my-reports"
 - scrollUntilVisible:
     element: "Blocked drain near the market"
     direction: DOWN

@@ -39,7 +39,8 @@ name: Sign in with a phone number and SMS code, set a password, sign out everywh
 - takeScreenshot: 06-phone-signed-in
 # A phone-only account has no password yet and can set one. (On a retry the
 # account already has one, so the current-password field is filled in too.)
-- tapOn: "Profile"
+- tapOn:
+    id: "tab-profile"
 - assertVisible: "Phone Citizen"
 - assertVisible: "\\+919999900001"
 - tapOn:

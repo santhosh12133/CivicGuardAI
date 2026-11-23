@@ -62,7 +62,8 @@ name: Sign up, browse issues, filter by category, open an issue
     id: "filter-category-all"
 - assertVisible: "Garbage pile on 5th Cross"
 # My reports is empty for a new account
-- tapOn: "My reports"
+- tapOn:
+    id: "tab-my-reports"
 - extendedWaitUntil:
     visible: "You haven't reported anything yet."
     timeout: 30000
