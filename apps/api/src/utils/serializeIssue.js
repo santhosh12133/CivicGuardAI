@@ -1,16 +1,21 @@
 const { User, IssueUpdate } = require('../models');
 
 const STAFF_ROLES = ['staff', 'admin'];
+// Triage fields are internal: citizens and the public don't see them.
+const STAFF_ONLY_FIELDS = ['priority', 'assigned_to', 'assignee', 'due_date', 'reporter', 'user_id'];
 const isStaff = (viewer) => Boolean(viewer && STAFF_ROLES.includes(viewer.role));
 
 // Associations to load when an issue is returned with its details.
 const reporterInclude = { model: User, as: 'reporter', attributes: ['id', 'name', 'email'] };
+const assigneeInclude = { model: User, as: 'assignee', attributes: ['id', 'name', 'role'] };
+// What staff and admins see in lists: who reported it and who is handling it.
+const staffListIncludes = [reporterInclude, assigneeInclude];
 const updatesInclude = {
   model: IssueUpdate,
   as: 'updates',
   include: [{ model: User, as: 'author', attributes: ['id', 'name', 'role'] }],
 };
-const detailIncludes = [reporterInclude, updatesInclude];
+const detailIncludes = [reporterInclude, assigneeInclude, updatesInclude];
 const detailOrder = [[{ model: IssueUpdate, as: 'updates' }, 'created_at', 'ASC']];
 
 const serializeUpdate = (update, viewer) => {
@@ -37,6 +42,19 @@ const serializeUpdate = (update, viewer) => {
   };
 };
 
+const OVERDUE_AFTER_DAYS = 7;
+const today = () => new Date().toISOString().slice(0, 10);
+
+/**
+ * Unresolved and past its due date; without a due date, unresolved for more than
+ * OVERDUE_AFTER_DAYS days. Same rule as the overdue filter and statistic.
+ */
+const isOverdue = (issue) => {
+  if (issue.status === 'Resolved') return false;
+  if (issue.due_date) return String(issue.due_date) < today();
+  return new Date(issue.created_at).getTime() < Date.now() - OVERDUE_AFTER_DAYS * 24 * 60 * 60 * 1000;
+};
+
 /**
  * Shapes an issue for a given viewer ({ userId, role } or undefined).
  *
@@ -54,9 +72,10 @@ const serializeIssue = (issue, viewer) => {
     result.reporter = json.reporter
       ? { id: json.reporter.id, name: json.reporter.name, email: json.reporter.email }
       : null;
+    result.assignee = json.assignee ? { id: json.assignee.id, name: json.assignee.name } : null;
+    result.is_overdue = isOverdue(json);
   } else {
-    delete result.reporter;
-    delete result.user_id;
+    for (const field of STAFF_ONLY_FIELDS) delete result[field];
   }
 
   if (Array.isArray(plain.updates)) {
@@ -70,8 +89,11 @@ const serializeIssue = (issue, viewer) => {
 
 module.exports = {
   STAFF_ROLES,
+  OVERDUE_AFTER_DAYS,
   isStaff,
+  isOverdue,
   reporterInclude,
+  staffListIncludes,
   detailIncludes,
   detailOrder,
   serializeIssue,

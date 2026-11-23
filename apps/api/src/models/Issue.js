@@ -3,6 +3,8 @@ const { sequelize } = require('../config/db');
 const { CATEGORY_IDS, DEFAULT_CATEGORY } = require('../constants/categories');
 
 const statuses = ['Open', 'In Progress', 'Resolved'];
+// Triage priority, lowest to highest.
+const PRIORITIES = ['low', 'normal', 'high', 'urgent'];
 
 const Issue = sequelize.define(
   'Issue',
@@ -80,6 +82,27 @@ const Issue = sequelize.define(
       allowNull: false,
       defaultValue: 'Open',
     },
+    // Internal triage fields, visible to staff and admins only.
+    // A string rather than an ENUM so adding a level needs no migration.
+    priority: {
+      type: DataTypes.STRING(10),
+      allowNull: false,
+      defaultValue: 'normal',
+      validate: {
+        isIn: [PRIORITIES],
+      },
+    },
+    // The staff member or admin responsible. Null when unassigned or if the
+    // account is removed.
+    assigned_to: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    // Target date for resolving the issue (calendar date, no time).
+    due_date: {
+      type: DataTypes.DATEONLY,
+      allowNull: true,
+    },
   },
   {
     tableName: 'issues',
@@ -93,4 +116,5 @@ const Issue = sequelize.define(
 module.exports = {
   Issue,
   statuses,
+  PRIORITIES,
 };

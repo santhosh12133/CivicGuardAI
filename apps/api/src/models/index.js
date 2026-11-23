@@ -1,6 +1,6 @@
 const { sequelize } = require('../config/db');
 const { User, roles } = require('./User');
-const { Issue, statuses } = require('./Issue');
+const { Issue, statuses, PRIORITIES } = require('./Issue');
 const { IssueUpdate } = require('./IssueUpdate');
 const { Photo } = require('./Photo');
 const { Session } = require('./Session');
@@ -9,6 +9,9 @@ const { OtpCode } = require('./OtpCode');
 // Who reported an issue.
 Issue.belongsTo(User, { as: 'reporter', foreignKey: 'user_id', onDelete: 'SET NULL' });
 User.hasMany(Issue, { as: 'issues', foreignKey: 'user_id', onDelete: 'SET NULL' });
+
+// The staff member or admin an issue is assigned to.
+Issue.belongsTo(User, { as: 'assignee', foreignKey: 'assigned_to', onDelete: 'SET NULL' });
 
 // An issue's timeline; removed together with the issue.
 Issue.hasMany(IssueUpdate, { as: 'updates', foreignKey: 'issue_id', onDelete: 'CASCADE' });
@@ -29,4 +32,5 @@ module.exports = {
   OtpCode,
   roles,
   statuses,
+  PRIORITIES,
 };

@@ -1,10 +1,12 @@
 const { validationResult } = require('express-validator');
 const { Op, fn, col, QueryTypes } = require('sequelize');
-const { Issue, IssueUpdate, sequelize, statuses } = require('../models');
+const { Issue, IssueUpdate, User, sequelize, statuses, PRIORITIES } = require('../models');
 const { CATEGORIES, CATEGORY_IDS, DEFAULT_CATEGORY } = require('../constants/categories');
 const {
+  STAFF_ROLES,
+  OVERDUE_AFTER_DAYS,
   isStaff,
-  reporterInclude,
+  staffListIncludes,
   detailIncludes,
   detailOrder,
   serializeIssue,
@@ -20,6 +22,29 @@ const path = require('path');
 // and geolib to compute distance between EXIF GPS and device GPS.
 const { exiftool } = require('../utils/exiftool');
 const { getDistance } = require('geolib');
+
+// Unresolved and past the due date, or (without a due date) older than OVERDUE_AFTER_DAYS.
+// Must match isOverdue() in utils/serializeIssue.js.
+const overdueWhere = () => ({
+  status: { [Op.ne]: 'Resolved' },
+  [Op.or]: [
+    { due_date: { [Op.lt]: new Date().toISOString().slice(0, 10) } },
+    {
+      due_date: null,
+      created_at: { [Op.lt]: new Date(Date.now() - OVERDUE_AFTER_DAYS * 24 * 60 * 60 * 1000) },
+    },
+  ],
+});
+
+const isValidTimeZone = (tz) => {
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+};
+const isoDate = (date) => date.toISOString().slice(0, 10);
 
 const createIssue = async (req, res, next) => {
   try {
@@ -353,9 +378,20 @@ const getIssues = async (req, res, next) => {
       where.user_id = req.user.userId;
     }
 
+    // Triage filters (staff and admins only).
+    const { assigned_to: assignedTo, priority, overdue } = req.query;
+    if ((assignedTo || priority || overdue) && !isStaff(req.user)) {
+      return res.status(403).json({ message: 'Only staff can filter by assignment, priority or due date' });
+    }
+    if (assignedTo === 'me') where.assigned_to = req.user.userId;
+    else if (assignedTo === 'none') where.assigned_to = null;
+    else if (assignedTo) where.assigned_to = assignedTo;
+    if (priority) where.priority = priority;
+    if (overdue === 'true') Object.assign(where, overdueWhere());
+
     const issues = await Issue.findAll({
       where,
-      include: isStaff(req.user) ? [reporterInclude] : [],
+      include: isStaff(req.user) ? staffListIncludes : [],
       order: [['created_at', 'DESC']],
     });
     return res.json(issues.map((issue) => serializeIssue(issue, req.user)));
@@ -367,13 +403,54 @@ const getIssues = async (req, res, next) => {
 // GET /api/issues/categories
 const getCategories = (req, res) => res.json(CATEGORIES);
 
+// People an issue can be assigned to: every staff member and admin.
+const getAssignees = async (req, res, next) => {
+  try {
+    const users = await User.findAll({
+      where: { role: STAFF_ROLES },
+      attributes: ['id', 'name', 'role'],
+      order: [['name', 'ASC']],
+    });
+    return res.json(users.map((user) => ({ id: user.id, name: user.name, role: user.role })));
+  } catch (error) {
+    return next(error);
+  }
+};
+
 // GET /api/issues/stats (staff/admin)
+const MAX_RANGE_DAYS = 366;
+
+/**
+ * Dashboard statistics. Totals are for all issues; `range` covers ?from=YYYY-MM-DD&to=YYYY-MM-DD
+ * (default: the last 30 days), with days counted in ?tz (an IANA time zone, default UTC).
+ */
 const getStats = async (req, res, next) => {
   try {
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const tz = req.query.tz || 'UTC';
+    if (!isValidTimeZone(tz)) return res.status(400).json({ message: 'Unknown time zone' });
+    const to = req.query.to || isoDate(new Date());
+    const from = req.query.from || isoDate(new Date(Date.parse(`${to}T00:00:00Z`) - 29 * 24 * 60 * 60 * 1000));
+    const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRe.test(from) || !dateRe.test(to) || Number.isNaN(Date.parse(from)) || Number.isNaN(Date.parse(to))) {
+      return res.status(400).json({ message: 'from and to must be dates (YYYY-MM-DD)' });
+    }
+    const days = (Date.parse(to) - Date.parse(from)) / (24 * 60 * 60 * 1000) + 1;
+    if (days < 1 || days > MAX_RANGE_DAYS) {
+      return res.status(400).json({ message: `The range must be 1 to ${MAX_RANGE_DAYS} days, with from before to` });
+    }
 
-    const countBy = async (column) => {
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const unresolved = { status: { [Op.ne]: 'Resolved' } };
+    const replacements = { from, to, tz };
+    // Each issue's first move to "Resolved".
+    const firstResolved = `SELECT issue_id, MIN(created_at) AS resolved_at
+                             FROM issue_updates WHERE to_status = 'Resolved' GROUP BY issue_id`;
+    const localDay = (column) => `CAST((${column} AT TIME ZONE :tz) AS date)`;
+    const inRange = (column) => `${localDay(column)} BETWEEN CAST(:from AS date) AND CAST(:to AS date)`;
+
+    const countBy = async (column, where = {}) => {
       const rows = await Issue.findAll({
+        where,
         attributes: [column, [fn('COUNT', col('id')), 'count']],
         group: [column],
         raw: true,
@@ -381,34 +458,79 @@ const getStats = async (req, res, next) => {
       return Object.fromEntries(rows.map((row) => [row[column], Number(row.count)]));
     };
 
-    const [byStatusRaw, byCategoryRaw, total, needsReview, reportedLast7, resolvedLast7, overdue, avgRows] =
-      await Promise.all([
-        countBy('status'),
-        countBy('category'),
-        Issue.count(),
-        Issue.count({ where: { needs_review: true, status: { [Op.ne]: 'Resolved' } } }),
-        Issue.count({ where: { created_at: { [Op.gte]: weekAgo } } }),
-        IssueUpdate.count({
-          where: { to_status: 'Resolved', created_at: { [Op.gte]: weekAgo } },
-          distinct: true,
-          col: 'issue_id',
-        }),
-        Issue.count({ where: { status: { [Op.ne]: 'Resolved' }, created_at: { [Op.lt]: weekAgo } } }),
-        // Time from report to the first "Resolved" for issues that are resolved now.
-        sequelize.query(
-          `SELECT AVG(EXTRACT(EPOCH FROM (u.resolved_at - i.created_at))) / 3600 AS hours
-             FROM issues i
-             JOIN (SELECT issue_id, MIN(created_at) AS resolved_at
-                     FROM issue_updates WHERE to_status = 'Resolved' GROUP BY issue_id) u
-               ON u.issue_id = i.id
-            WHERE i.status = 'Resolved'`,
-          { type: QueryTypes.SELECT }
-        ),
-      ]);
+    const [
+      byStatusRaw, byCategoryRaw, byPriorityRaw, total, needsReview, reportedLast7, resolvedLast7, overdue, avgRows,
+      mine, unassigned, workload, series, rangeCategoryRows, rangeAvgRows,
+    ] = await Promise.all([
+      countBy('status'),
+      countBy('category'),
+      countBy('priority', unresolved),
+      Issue.count(),
+      Issue.count({ where: { needs_review: true, ...unresolved } }),
+      Issue.count({ where: { created_at: { [Op.gte]: weekAgo } } }),
+      IssueUpdate.count({
+        where: { to_status: 'Resolved', created_at: { [Op.gte]: weekAgo } },
+        distinct: true,
+        col: 'issue_id',
+      }),
+      Issue.count({ where: overdueWhere() }),
+      // Time from report to the first "Resolved" for issues that are resolved now.
+      sequelize.query(
+        `SELECT AVG(EXTRACT(EPOCH FROM (u.resolved_at - i.created_at))) / 3600 AS hours
+           FROM issues i JOIN (${firstResolved}) u ON u.issue_id = i.id
+          WHERE i.status = 'Resolved'`,
+        { type: QueryTypes.SELECT }
+      ),
+      Issue.count({ where: { assigned_to: req.user.userId, ...unresolved } }),
+      Issue.count({ where: { assigned_to: null, ...unresolved } }),
+      // Unresolved issues per assignee.
+      sequelize.query(
+        `SELECT u.id, u.name,
+                COUNT(*) FILTER (WHERE i.status = 'Open') AS open,
+                COUNT(*) FILTER (WHERE i.status = 'In Progress') AS in_progress
+           FROM issues i JOIN users u ON u.id = i.assigned_to
+          WHERE i.status <> 'Resolved'
+          GROUP BY u.id, u.name ORDER BY COUNT(*) DESC, u.name`,
+        { type: QueryTypes.SELECT }
+      ),
+      // Reported and resolved per day in the range, including days with none.
+      sequelize.query(
+        `WITH days AS (
+           SELECT CAST(d AS date) AS day
+             FROM generate_series(CAST(:from AS date), CAST(:to AS date), interval '1 day') AS d),
+         reported AS (
+           SELECT ${localDay('created_at')} AS day, COUNT(*) AS n FROM issues
+            WHERE ${inRange('created_at')} GROUP BY 1),
+         resolved AS (
+           SELECT ${localDay('resolved_at')} AS day, COUNT(*) AS n FROM (${firstResolved}) r
+            WHERE ${inRange('resolved_at')} GROUP BY 1)
+         SELECT to_char(days.day, 'YYYY-MM-DD') AS date,
+                COALESCE(reported.n, 0) AS reported, COALESCE(resolved.n, 0) AS resolved
+           FROM days LEFT JOIN reported USING (day) LEFT JOIN resolved USING (day)
+          ORDER BY days.day`,
+        { type: QueryTypes.SELECT, replacements }
+      ),
+      sequelize.query(
+        `SELECT category, COUNT(*) AS n FROM issues WHERE ${inRange('created_at')} GROUP BY category`,
+        { type: QueryTypes.SELECT, replacements }
+      ),
+      // Average time to resolve for issues first resolved within the range.
+      sequelize.query(
+        `SELECT AVG(EXTRACT(EPOCH FROM (u.resolved_at - i.created_at))) / 3600 AS hours
+           FROM issues i JOIN (${firstResolved}) u ON u.issue_id = i.id
+          WHERE ${inRange('u.resolved_at')}`,
+        { type: QueryTypes.SELECT, replacements }
+      ),
+    ]);
 
+    const hoursOf = (rows) => {
+      const value = rows[0] && rows[0].hours !== null ? Number(rows[0].hours) : null;
+      return value === null ? null : Math.round(value * 10) / 10;
+    };
     const byStatus = Object.fromEntries(statuses.map((status) => [status, byStatusRaw[status] || 0]));
     const byCategory = Object.fromEntries(CATEGORY_IDS.map((id) => [id, byCategoryRaw[id] || 0]));
-    const hours = avgRows[0] && avgRows[0].hours !== null ? Number(avgRows[0].hours) : null;
+    const rangeByCategoryRaw = Object.fromEntries(rangeCategoryRows.map((row) => [row.category, Number(row.n)]));
+    const daily = series.map((row) => ({ date: row.date, reported: Number(row.reported), resolved: Number(row.resolved) }));
 
     return res.json({
       total,
@@ -417,13 +539,33 @@ const getStats = async (req, res, next) => {
       needsReview,
       overdue,
       last7Days: { reported: reportedLast7, resolved: resolvedLast7 },
-      avgResolutionHours: hours === null ? null : Math.round(hours * 10) / 10,
+      avgResolutionHours: hoursOf(avgRows),
+      unresolvedByPriority: Object.fromEntries(PRIORITIES.map((p) => [p, byPriorityRaw[p] || 0])),
+      assignment: {
+        mine,
+        unassigned,
+        byAssignee: workload.map((row) => ({
+          id: row.id,
+          name: row.name,
+          open: Number(row.open),
+          inProgress: Number(row.in_progress),
+        })),
+      },
+      range: {
+        from,
+        to,
+        timeZone: tz,
+        reported: daily.reduce((sum, day) => sum + day.reported, 0),
+        resolved: daily.reduce((sum, day) => sum + day.resolved, 0),
+        avgResolutionHours: hoursOf(rangeAvgRows),
+        byCategory: Object.fromEntries(CATEGORY_IDS.map((id) => [id, rangeByCategoryRaw[id] || 0])),
+        daily,
+      },
     });
   } catch (error) {
     return next(error);
   }
 };
-
 const getIssueById = async (req, res, next) => {
   try {
     const errors = validationResult(req);
@@ -472,6 +614,32 @@ const updateIssue = async (req, res, next) => {
       return res.status(400).json({ message: 'Unknown category' });
     }
 
+    // Triage: priority, assignee (a staff member or admin; '' or null to unassign), due date ('' or null to clear).
+    const triage = {};
+    if (body.priority !== undefined) {
+      if (!PRIORITIES.includes(body.priority)) {
+        return res.status(400).json({ message: `Priority must be one of: ${PRIORITIES.join(', ')}` });
+      }
+      triage.priority = body.priority;
+    }
+    if (body.assigned_to !== undefined) {
+      const assignee = body.assigned_to === '' || body.assigned_to === null ? null : String(body.assigned_to);
+      if (assignee) {
+        const user = await User.findByPk(assignee).catch(() => null);
+        if (!user || !STAFF_ROLES.includes(user.role)) {
+          return res.status(400).json({ message: 'Issues can only be assigned to staff members or admins' });
+        }
+      }
+      triage.assigned_to = assignee;
+    }
+    if (body.due_date !== undefined) {
+      const due = body.due_date === '' || body.due_date === null ? null : String(body.due_date);
+      if (due && (!/^\d{4}-\d{2}-\d{2}$/.test(due) || Number.isNaN(Date.parse(due)))) {
+        return res.status(400).json({ message: 'Due date must be a date (YYYY-MM-DD)' });
+      }
+      triage.due_date = due;
+    }
+
     // When status is sent as a multipart form field, it may be a string.
     // Ensure we're comparing against the correct value.
     if (typeof status === 'string') {
@@ -487,6 +655,7 @@ const updateIssue = async (req, res, next) => {
       ...(longitude !== undefined && { longitude }),
       ...(status !== undefined && { status }),
       ...(category !== undefined && { category }),
+      ...triage,
     };
 
     // If a file was uploaded (multipart request), construct the public URL
@@ -587,6 +756,7 @@ const deleteIssue = async (req, res, next) => {
 };
 
 module.exports = {
+  getAssignees,
   createIssue,
   getIssues,
   getCategories,

@@ -1,9 +1,11 @@
 const express = require('express');
 const { body, param, query } = require('express-validator');
 const { CATEGORY_IDS } = require('../constants/categories');
+const { PRIORITIES } = require('../models');
 const {
   createIssue,
   getIssues,
+  getAssignees,
   getCategories,
   getStats,
   getIssueById,
@@ -53,6 +55,13 @@ const listValidation = [
   query('category').optional().isIn(CATEGORY_IDS).withMessage('Unknown category'),
   query('mine').optional().isIn(['true', 'false']),
   query('needs_review').optional().isIn(['true', 'false']),
+  // Staff only (checked in the controller): me, none, or a user id.
+  query('assigned_to')
+    .optional()
+    .custom((value) => value === 'me' || value === 'none' || /^[0-9a-f-]{36}$/i.test(value))
+    .withMessage('assigned_to must be me, none or a user id'),
+  query('priority').optional().isIn(PRIORITIES).withMessage(`Priority must be one of: ${PRIORITIES.join(', ')}`),
+  query('overdue').optional().isIn(['true', 'false']),
 ];
 
 const updateIssueValidation = [
@@ -88,6 +97,7 @@ const updateIssueValidation = [
     .isString()
     .isLength({ max: 1000 })
     .withMessage('Note must be 1000 characters or fewer'),
+  // priority, assigned_to and due_date are validated in the controller (they accept '' / null to clear).
 ];
 
 router.post(
@@ -99,6 +109,7 @@ router.post(
 );
 router.get('/', identifyUser, listValidation, getIssues);
 router.get('/categories', getCategories);
+router.get('/assignees', requireAuth, authorizeRoles('staff', 'admin'), getAssignees);
 router.get('/stats', requireAuth, authorizeRoles('staff', 'admin'), getStats);
 router.get('/:id', identifyUser, issueIdValidation, getIssueById);
 router.put(
