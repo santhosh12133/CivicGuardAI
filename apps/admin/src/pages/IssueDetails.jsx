@@ -15,10 +15,8 @@ import {
   Stack,
   Divider,
 } from "@mui/material";
-import {
-  ArrowBack as BackIcon,
-  CloudUpload as UploadIcon,
-} from "@mui/icons-material";
+import BackIcon from "@mui/icons-material/ArrowBack";
+import UploadIcon from "@mui/icons-material/CloudUpload";
 import { issuesAPI } from "../api/api";
 import { useCategories, categoryLabel, STATUS_COLORS } from "../categories";
 

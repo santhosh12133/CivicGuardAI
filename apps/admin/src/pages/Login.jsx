@@ -11,7 +11,7 @@ import {
   Divider,
   Link,
 } from "@mui/material";
-import { Google as GoogleIcon } from "@mui/icons-material";
+import GoogleIcon from "@mui/icons-material/Google";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { adminAuth, session } from "../api/api";
 

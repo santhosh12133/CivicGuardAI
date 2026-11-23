@@ -13,7 +13,7 @@ import {
   TextField,
   Alert,
 } from '@mui/material';
-import { AccountCircle } from '@mui/icons-material';
+import AccountCircle from '@mui/icons-material/AccountCircle';
 import { authAPI } from '../api/api';
 
 const ChangePasswordDialog = ({ open, onClose }) => {

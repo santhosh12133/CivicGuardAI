@@ -20,7 +20,7 @@ import {
   Stack,
   Chip,
 } from "@mui/material";
-import { PersonAdd as AddIcon } from "@mui/icons-material";
+import AddIcon from "@mui/icons-material/PersonAdd";
 import { usersAPI } from "../api/api";
 import { currentUser } from "../categories";
 

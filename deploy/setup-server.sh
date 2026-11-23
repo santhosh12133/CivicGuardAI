@@ -252,8 +252,13 @@ umask 022
 COMPOSE=(docker compose)
 
 # ----------------------------------------------------------------------------- start
-log "Building and starting CivicFix (the first build takes 5-15 minutes on a small server)"
-"${COMPOSE[@]}" up -d --build --remove-orphans --wait --wait-timeout 1200 \
+log "Building CivicFix (the first build takes 5-15 minutes; up to 40 on a 1 GB server)"
+# One image at a time: building both at once needs twice the memory, too much for 1 GB servers.
+for service in civicfix-api civicfix-admin; do
+  "${COMPOSE[@]}" build "$service" || die "Building $service failed (see above). Re-run the same command once; if it fails again, send the last 40 lines."
+done
+log "Starting CivicFix"
+"${COMPOSE[@]}" up -d --remove-orphans --wait --wait-timeout 600 \
   || {
     "${COMPOSE[@]}" logs --tail 60
     "${COMPOSE[@]}" ps -a --format 'table {{.Service}}\t{{.State}}\t{{.Status}}'

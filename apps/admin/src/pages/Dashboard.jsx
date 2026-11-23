@@ -14,11 +14,9 @@ import {
   MenuItem,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
-import {
-  Visibility as ViewIcon,
-  Delete as DeleteIcon,
-  Refresh as RefreshIcon,
-} from "@mui/icons-material";
+import ViewIcon from "@mui/icons-material/Visibility";
+import DeleteIcon from "@mui/icons-material/Delete";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { issuesAPI } from "../api/api";
 import { useCategories, categoryLabel, STATUS_COLORS, currentUser } from "../categories";

@@ -10,12 +10,10 @@ import {
   Typography,
   Divider,
 } from '@mui/material';
-import {
-  Insights as OverviewIcon,
-  ListAlt as IssuesIcon,
-  Group as StaffIcon,
-  Logout as LogoutIcon,
-} from '@mui/icons-material';
+import OverviewIcon from '@mui/icons-material/Insights';
+import IssuesIcon from '@mui/icons-material/ListAlt';
+import StaffIcon from '@mui/icons-material/Group';
+import LogoutIcon from '@mui/icons-material/Logout';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { adminAuth } from '../api/api';
 

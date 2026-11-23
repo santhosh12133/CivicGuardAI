@@ -8,7 +8,8 @@ COPY . .
 ARG VITE_API_URL
 RUN test -n "$VITE_API_URL" || (echo "Build argument VITE_API_URL is required, e.g. https://example.com/api" >&2; exit 1)
 ENV VITE_API_URL=$VITE_API_URL
-RUN npm run build
+# Small servers (1 GB + swap): let the build use swap instead of stopping at Node's default heap limit.
+RUN NODE_OPTIONS=--max-old-space-size=1536 npm run build
 
 FROM nginx:1.27-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf

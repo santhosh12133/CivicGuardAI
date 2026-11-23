@@ -17,9 +17,8 @@ on:
     paths:
       - "deploy/**"
       - "docker-compose.yml"
-      - "apps/api/Dockerfile"
-      - "apps/admin/Dockerfile"
-      - "apps/admin/nginx.conf"
+      - "apps/api/**"
+      - "apps/admin/**"
       - ".github/workflows/server-deploy.yml"
       - ".github/ci/**"
   workflow_dispatch:
@@ -214,6 +213,12 @@ jobs:
 
       - name: ShellCheck the Oracle scripts
         run: shellcheck -S warning deploy/*.sh
+
+      - name: Admin portal builds within 1 GB of memory (Oracle E2.1.Micro has 1 GB)
+        run: |
+          docker run --rm --memory=1g --memory-swap=1g -v "$PWD/apps/admin:/src:ro" -e VITE_API_URL=https://example.com/api \
+            node:22-alpine sh -c 'apk add -q --no-cache time >/dev/null && cp -r /src /app && cd /app && npm ci --no-audit --no-fund --silent \
+              && NODE_OPTIONS=--max-old-space-size=1536 /usr/bin/time -f "[PASS] vite build peak memory: %M KB, %e s" npx vite build --logLevel warn'
 
       - name: Install with deploy/setup-server.sh (standalone)
         run: >-
