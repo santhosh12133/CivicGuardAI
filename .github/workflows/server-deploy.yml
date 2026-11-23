@@ -78,9 +78,9 @@ jobs:
           [ "$(curl -fsS http://127.0.0.1/)" = mca-web ]
 
       - name: Install CivicFix with deploy/setup-server.sh
-        run: >-
-          sudo bash deploy/setup-server.sh --site-address "http://$CF_HOST" --app-dir "$GITHUB_WORKSPACE"
-          --no-update --admin-email Admin@Example.com --admin-name "CI Admin" | tee install.log
+        run: |
+          sudo bash deploy/setup-server.sh --site-address "http://$CF_HOST" --app-dir "$GITHUB_WORKSPACE" \
+            --no-update --admin-email Admin@Example.com --admin-name "CI Admin" | tee install.log
           grep -q "^Mode: shared" install.log
 
       - name: Verify both sites through Caddy
