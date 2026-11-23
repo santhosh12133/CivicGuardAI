@@ -103,7 +103,8 @@ test('the map shows every unresolved issue and opens one', async ({ page }) => {
   await page.getByRole('combobox', { name: 'Category' }).click();
   await page.getByRole('option', { name: 'Garbage', exact: true }).click();
   await expect(markers).toHaveCount(1);
-  await markers.first().click({ force: true });
+  // Dispatch the click on the dot itself: the view may still be zooming to it.
+  await markers.first().dispatchEvent('click');
   await expect(page.getByText('Garbage pile on 5th Cross').first()).toBeVisible();
   await page.getByRole('button', { name: 'Open issue' }).click();
   await expect(page.getByRole('heading', { name: 'Garbage pile on 5th Cross' })).toBeVisible();
