@@ -5,7 +5,7 @@ name: The server address screen validates input
     clearState: true
 - runFlow: _dismiss-system-dialogs.yaml
 - extendedWaitUntil:
-    visible: "Welcome Back.*"
+    visible: "Welcome back"
     timeout: 150000
 - tapOn:
     id: "change-server"
@@ -22,4 +22,4 @@ name: The server address screen validates input
     timeout: 30000
 - takeScreenshot: 05-server-validation
 - tapOn: "Cancel"
-- assertVisible: "Welcome Back.*"
+- assertVisible: "Welcome back"

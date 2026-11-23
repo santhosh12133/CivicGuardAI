@@ -7,7 +7,7 @@ name: A citizen reports a new issue with a gallery photo
       all: allow
 - runFlow: _dismiss-system-dialogs.yaml
 - extendedWaitUntil:
-    visible: "Welcome Back.*"
+    visible: "Welcome back"
     timeout: 150000
 - tapOn:
     id: "login-email"
@@ -21,18 +21,20 @@ name: A citizen reports a new issue with a gallery photo
 - extendedWaitUntil:
     visible: "Hello, Asha"
     timeout: 60000
-- tapOn: "Report"
+- tapOn:
+    id: "tab-report"
 - extendedWaitUntil:
-    visible: "Report a Civic Issue"
+    visible: "Report a problem"
     timeout: 30000
-# A category is required
+- takeScreenshot: 03-report-form
+# Nothing filled in yet: the photo is asked for first
 - scrollUntilVisible:
     element:
       id: "report-submit"
     direction: DOWN
 - tapOn:
     id: "report-submit"
-- assertVisible: "Please choose what kind of problem this is"
+- assertVisible: "Add a photo of the problem first."
 - scrollUntilVisible:
     element:
       id: "category-streetlight"
@@ -95,7 +97,8 @@ name: A citizen reports a new issue with a gallery photo
     visible: "Flickering streetlight at park gate"
     timeout: 120000
 - extendedWaitUntil:
-    visible: "Updates"
+    visible:
+      id: "issue-detail"
     timeout: 60000
 - assertVisible: "Open"
 - assertVisible: "Streetlight"

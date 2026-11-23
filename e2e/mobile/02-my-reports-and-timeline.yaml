@@ -5,7 +5,7 @@ name: A citizen follows their own report and sees staff updates
     clearState: true
 - runFlow: _dismiss-system-dialogs.yaml
 - extendedWaitUntil:
-    visible: "Welcome Back.*"
+    visible: "Welcome back"
     timeout: 150000
 - tapOn:
     id: "login-email"
@@ -19,7 +19,8 @@ name: A citizen follows their own report and sees staff updates
 - extendedWaitUntil:
     visible: "Hello, Asha"
     timeout: 60000
-- tapOn: "My Reports"
+- tapOn:
+    id: "tab-my-reports"
 - extendedWaitUntil:
     visible: "2 reports you have made.*"
     timeout: 30000
@@ -30,14 +31,15 @@ name: A citizen follows their own report and sees staff updates
 - takeScreenshot: 02-my-reports
 - tapOn: "Streetlight out near bus stop"
 - extendedWaitUntil:
-    visible: "Updates"
+    visible:
+      id: "issue-detail"
     timeout: 30000
-- assertVisible: "In Progress"
+- assertVisible: "In progress"
 - assertVisible: "Streetlight"
 - assertVisible: "Your report"
 - scrollUntilVisible:
     element: "Crew scheduled for Monday"
     direction: DOWN
-- assertVisible: "Status changed to In Progress"
+- assertVisible: "Status changed to In progress"
 - assertVisible: ".*city team.*"
 - takeScreenshot: 02-timeline

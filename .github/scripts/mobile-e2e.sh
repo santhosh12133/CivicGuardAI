@@ -26,7 +26,6 @@ env_args=(
   -e "ASHA_PASSWORD=$(jq -r .asha.password "$SEED")"
   -e "RAVI_EMAIL=$(jq -r .ravi.email "$SEED")"
   -e "RAVI_PASSWORD=$(jq -r .ravi.password "$SEED")"
-  -e "NEW_EMAIL=meera.$(date +%s)@example.com"
   -e "TEST_PHONE_NUMBER=${TEST_OTP_PHONE#+91}"
   -e "TEST_PHONE_CODE=${TEST_OTP_CODE}"
 )
@@ -43,10 +42,11 @@ for flow in "$FLOWS"/0*.yaml; do
   adb shell input keyevent KEYCODE_HOME >/dev/null 2>&1 || true
   # Emulators on shared CI machines are sometimes slow to start an app, so
   # each flow gets one retry; the log says when a retry was needed.
-  if maestro test "${env_args[@]}" --debug-output "$OUT/debug-$name" "$flow"; then
+  # A new address per attempt: a retry must not trip over the account the first attempt created.
+  if maestro test "${env_args[@]}" -e "NEW_EMAIL=meera.$(date +%s%N)@example.com" --debug-output "$OUT/debug-$name" "$flow"; then
     echo "PASSED: $name"
   elif echo "::warning::Retrying $name once" && \
-       maestro test "${env_args[@]}" --debug-output "$OUT/debug-$name-retry" "$flow"; then
+       maestro test "${env_args[@]}" -e "NEW_EMAIL=meera.$(date +%s%N)@example.com" --debug-output "$OUT/debug-$name-retry" "$flow"; then
     echo "PASSED: $name (on retry)"
   else
     echo "::error::Mobile flow failed: $name"
@@ -65,6 +65,7 @@ for flow in "$FLOWS"/0*.yaml; do
     fi
   fi
   adb logcat -d > "$OUT/logcat-$name.txt" 2>/dev/null || true
+  adb exec-out screencap -p > "$OUT/end-$name.png" 2>/dev/null || rm -f "$OUT/end-$name.png"
   echo "::endgroup::"
 done
 

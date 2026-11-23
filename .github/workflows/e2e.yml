@@ -184,6 +184,33 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
           script: API_LOG=${{ runner.temp }}/api.log bash .github/scripts/mobile-e2e.sh ${{ runner.temp }}/civicfix-e2e.apk ${{ runner.temp }}/gallery.jpg ${{ runner.temp }}/seed.json mobile-e2e-results
 
+      # Small previews of the emulator screenshots, readable straight from the log
+      # (one "SCREENSHOT <name> <base64 JPEG>" line each) when the artifact can't be downloaded.
+      - name: Screenshot previews
+        if: always()
+        run: |
+          python3 -m pip install --quiet --user pillow || { echo "Pillow not available"; exit 0; }
+          python3 - <<'PY'
+          import base64, io, os, subprocess
+          from PIL import Image
+          # Maestro writes takeScreenshot files (and failure captures) under each
+          # debug folder's .maestro/tests; the script adds end-<flow>.png.
+          found = subprocess.run(
+              ["find", "mobile-e2e-results", "-name", "*.png", "-print0"], capture_output=True
+          ).stdout.decode().split("\0")
+          paths = sorted(p for p in found if p)
+          print(f"{len(paths)} screenshots")
+          for path in paths:
+              flow = next((part[len("debug-"):] for part in path.split("/") if part.startswith("debug-")), "")
+              base = os.path.splitext(os.path.basename(path))[0]
+              name = "".join(c if c.isalnum() or c in "-_" else "_" for c in (f"{flow}__{base}" if flow else base))[:90]
+              image = Image.open(path).convert("RGB")
+              image.thumbnail((360, 800))
+              buffer = io.BytesIO()
+              image.save(buffer, "JPEG", quality=70)
+              print("SCREENSHOT", name, base64.b64encode(buffer.getvalue()).decode())
+          PY
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:

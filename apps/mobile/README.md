@@ -17,13 +17,26 @@ Use your computer's LAN IP, not `localhost` (the phone cannot reach it); the And
 | Screen | File |
 |---|---|
 | Sign in (email, phone, Google), forgot password, sign up, server address | `LoginScreen`, `PhoneLoginScreen`, `ForgotPasswordScreen`, `SignupScreen`, `ServerScreen` |
-| Home (all issues, category filter) | `HomeScreen` |
-| My Reports | `MyReportsScreen` (exported from `HomeScreen`) |
+| Home (all issues, status and category filters) | `HomeScreen` |
+| My reports | `MyReportsScreen` (exported from `HomeScreen`) |
 | Report an issue | `ReportScreen` |
 | Issue detail and timeline | `IssueDetailScreen` |
 | Profile (password, sign out, sign out everywhere) | `ProfileScreen` |
 
 Sign-in state lives in `src/context/AuthContext.js`; HTTP, token renewal and the server address in `src/utils/api.js`. Tokens are stored in AsyncStorage. Google sign-in returns to the app through the `civicfix://auth` link.
+
+## Design system
+
+Every screen is built from `src/ui`, so new screens should be too:
+
+| File | Contents |
+|---|---|
+| `theme.js` | Colours (brand blue from the app icon; status colours shared with the admin dashboard), spacing, radii, the type scale, and the Paper and navigation themes built from them |
+| `components.js` | `Button`, `Field`, `Banner`, `StatusBadge`, `Tag`, `ProgressTrack`, `EmptyState`, `Skeleton`, `Card`, `ListRow`, `Avatar`, `Logo`, `ScreenHeader`, `StatusBarBackdrop`, `IconButton`, `PressableScale` |
+| `AuthLayout.js` | The frame shared by the sign-in screens |
+| `time.js` | `timeAgo`, `shortDate`, `dateTime` |
+
+Guidelines: sentence case, no emoji in the interface, colours and sizes only from `theme.js`, safe-area insets rather than fixed top padding, and a `testID` on anything the [phone tests](../../e2e/mobile) tap.
 
 ## Configuration
 

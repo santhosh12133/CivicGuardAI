@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
-import { Button, TextInput, Text, HelperText } from 'react-native-paper';
+import { StyleSheet, Text } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
+import AuthLayout from '../ui/AuthLayout';
+import { Banner, Button, Field } from '../ui/components';
+import { type } from '../ui/theme';
 
 // Asks for the CivicFix server address. Shown on first launch of a build that
 // has no address built in, and from the login screen to change it.
@@ -12,6 +14,7 @@ const ServerScreen = () => {
   const [address, setAddress] = useState(serverUrl || '');
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState(null);
+  const canGoBack = Boolean(serverUrl) && navigation.canGoBack();
 
   const handleConnect = async () => {
     try {
@@ -27,62 +30,48 @@ const ServerScreen = () => {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    <AuthLayout
+      back={canGoBack}
+      title="Connect to your CivicFix server"
+      subtitle="Enter the address your city or organisation gave you, for example https://civicfix.example.com"
     >
-      <View style={styles.inner}>
-        <Text variant="headlineMedium" style={styles.title}>
-          Connect to your CivicFix server
+      <Field
+        label="Server address"
+        testID="server-address"
+        value={address}
+        onChangeText={(value) => {
+          setAddress(value);
+          setError(null);
+        }}
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="url"
+        onSubmitEditing={handleConnect}
+      />
+      {error ? <Banner tone="error">{error}</Banner> : null}
+      <Button
+        title={checking ? 'Checking' : 'Connect'}
+        onPress={handleConnect}
+        loading={checking}
+        testID="server-connect"
+      />
+      {checking ? (
+        <Text style={[type.caption, styles.center]}>
+          A server that has been idle can take up to a minute to answer.
         </Text>
-        <Text variant="bodyMedium" style={styles.subtitle}>
-          Enter the server address you were given, for example
-          https://civicfix-api.example.com
-        </Text>
-
-        <TextInput
-          label="Server address"
-          testID="server-address"
-          value={address}
-          onChangeText={setAddress}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="url"
-          mode="outlined"
-          style={styles.input}
-          onSubmitEditing={handleConnect}
+      ) : null}
+      {canGoBack ? (
+        <Button
+          variant="ghost"
+          title="Cancel"
+          onPress={() => navigation.goBack()}
+          disabled={checking}
         />
-
-        {error && <HelperText type="error">{error}</HelperText>}
-
-        <Button mode="contained" onPress={handleConnect} loading={checking} disabled={checking} style={styles.button} testID="server-connect">
-          {checking ? 'Checking…' : 'Connect'}
-        </Button>
-        {checking && (
-          <Text variant="bodySmall" style={styles.hint}>
-            A sleeping server can take up to a minute to answer.
-          </Text>
-        )}
-
-        {Boolean(serverUrl) && navigation.canGoBack() && (
-          <Button mode="text" onPress={() => navigation.goBack()} style={styles.cancel} disabled={checking}>
-            Cancel
-          </Button>
-        )}
-      </View>
-    </KeyboardAvoidingView>
+      ) : null}
+    </AuthLayout>
   );
 };
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
-  inner: { flex: 1, paddingHorizontal: 24, paddingTop: 120 },
-  title: { fontWeight: '700' },
-  subtitle: { marginTop: 8, marginBottom: 32, color: '#64748b' },
-  input: { marginBottom: 8 },
-  button: { marginTop: 8, paddingVertical: 4 },
-  hint: { marginTop: 12, color: '#64748b', textAlign: 'center' },
-  cancel: { marginTop: 16 },
-});
+const styles = StyleSheet.create({ center: { textAlign: 'center' } });
 
 export default ServerScreen;
