@@ -12,7 +12,8 @@ name: A citizen sees the city team's resolution photo on a fixed report
 - inputText: ${RAVI_EMAIL}
 - tapOn:
     id: "login-password"
-- inputText: ${RAVI_PASSWORD}
+# 04-profile-password.yaml changed Ravi's password to this one.
+- inputText: "ravi-new-password-2"
 - hideKeyboard
 - tapOn:
     id: "login-submit"
