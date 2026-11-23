@@ -65,6 +65,7 @@ for flow in "$FLOWS"/0*.yaml; do
     fi
   fi
   adb logcat -d > "$OUT/logcat-$name.txt" 2>/dev/null || true
+  adb exec-out screencap -p > "$OUT/end-$name.png" 2>/dev/null || rm -f "$OUT/end-$name.png"
   echo "::endgroup::"
 done
 

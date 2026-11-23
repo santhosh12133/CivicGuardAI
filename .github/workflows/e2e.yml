@@ -193,9 +193,13 @@ jobs:
           python3 - <<'PY'
           import base64, glob, io, os
           from PIL import Image
-          # Maestro versions differ in where takeScreenshot writes; look in all of them.
-          roots = ["mobile-e2e-results", "e2e/mobile", os.path.expanduser("~/.maestro/tests")]
-          paths = sorted({p for root in roots for p in glob.glob(f"{root}/**/*.png", recursive=True)})
+          # Maestro versions differ in where takeScreenshot writes, so search for the files.
+          import subprocess
+          found = subprocess.run(
+              "find / -xdev \\( -name '0[0-9]-*.png' -o -name 'end-0*.png' \\) -not -path '*/node_modules/*' 2>/dev/null",
+              shell=True, capture_output=True, text=True,
+          ).stdout.split()
+          paths = sorted(set(found))
           print(f"{len(paths)} screenshots:", ", ".join(paths)[:2000])
           for path in paths:
               if "/debug-" in path and "screenshot-" in os.path.basename(path):
