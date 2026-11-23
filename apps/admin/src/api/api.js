@@ -133,8 +133,12 @@ export const issuesAPI = {
     return response.data;
   },
   categories: async () => (await api.get("/issues/categories")).data,
-  stats: async () => (await api.get("/issues/stats")).data,
-  // Any of { status, category, note }; a note alone is allowed.
+  // { from, to } as YYYY-MM-DD (default: last 30 days); days are counted in the browser's time zone.
+  stats: async (params = {}) =>
+    (await api.get("/issues/stats", { params: { tz: Intl.DateTimeFormat().resolvedOptions().timeZone, ...params } })).data,
+  // Staff and admins an issue can be assigned to.
+  assignees: async () => (await api.get("/issues/assignees")).data,
+  // Any of { status, category, note, priority, assigned_to, due_date }; a note alone is allowed.
   update: async (id, changes) => (await api.put(`/issues/${id}`, changes)).data,
   getById: async (id) => {
     const response = await api.get(`/issues/${id}`);

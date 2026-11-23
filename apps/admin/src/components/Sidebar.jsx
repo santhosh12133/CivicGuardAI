@@ -1,87 +1,100 @@
-import React from 'react';
+import React from "react";
 import {
+  Box,
   Drawer,
   List,
   ListItem,
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  Toolbar,
   Typography,
-  Divider,
-} from '@mui/material';
-import OverviewIcon from '@mui/icons-material/Insights';
-import IssuesIcon from '@mui/icons-material/ListAlt';
-import StaffIcon from '@mui/icons-material/Group';
-import LogoutIcon from '@mui/icons-material/Logout';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { adminAuth } from '../api/api';
+  useMediaQuery,
+} from "@mui/material";
+import { useTheme } from "@mui/material/styles";
+import OverviewIcon from "@mui/icons-material/SpaceDashboardOutlined";
+import IssuesIcon from "@mui/icons-material/ListAlt";
+import MapIcon from "@mui/icons-material/MapOutlined";
+import StaffIcon from "@mui/icons-material/GroupOutlined";
+import LogoutIcon from "@mui/icons-material/Logout";
+import { useNavigate, useLocation } from "react-router-dom";
+import { adminAuth } from "../api/api";
 
-const drawerWidth = 250;
+export const DRAWER_WIDTH = 248;
 
-const Sidebar = ({ user }) => {
+// The CivicFix mark: a map pin with a check, as in the app icon.
+const Logo = () => (
+  <Box component="svg" viewBox="0 0 100 100" aria-hidden sx={{ width: 34, height: 34, flexShrink: 0 }}>
+    <rect width="100" height="100" rx="22" fill="#2563eb" />
+    <g transform="translate(14 12) scale(0.72)">
+      <path d="M50 8C32.3 8 18 22.3 18 40c0 24 32 52 32 52s32-28 32-52C82 22.3 67.7 8 50 8z" fill="#fff" />
+      <path d="M37 40.5l9 9 17-18" fill="none" stroke="#2563eb" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
+    </g>
+  </Box>
+);
+
+const Sidebar = ({ user, mobileOpen, onMobileClose }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const theme = useTheme();
+  const desktop = useMediaQuery(theme.breakpoints.up("md"));
 
   // Ends the session on the server too, so the tokens stop working.
   const handleLogout = async () => {
     await adminAuth.logout();
-    navigate('/login');
+    navigate("/login");
   };
 
   const isActive = (path) =>
-    path === '/' ? location.pathname === '/' : location.pathname.startsWith(path) ||
-      (path === '/issues' && location.pathname.startsWith('/issue/'));
+    path === "/"
+      ? location.pathname === "/"
+      : location.pathname.startsWith(path) || (path === "/issues" && location.pathname.startsWith("/issue/"));
 
   const menuItems = [
-    { text: 'Overview', icon: <OverviewIcon />, path: '/' },
-    { text: 'Issues', icon: <IssuesIcon />, path: '/issues' },
-    ...(user?.role === 'admin' ? [{ text: 'Staff', icon: <StaffIcon />, path: '/staff' }] : []),
-    { text: 'Logout', icon: <LogoutIcon />, action: handleLogout },
+    { text: "Overview", icon: <OverviewIcon />, path: "/" },
+    { text: "Issues", icon: <IssuesIcon />, path: "/issues" },
+    { text: "Map", icon: <MapIcon />, path: "/map" },
+    ...(user?.role === "admin" ? [{ text: "Staff", icon: <StaffIcon />, path: "/staff" }] : []),
   ];
 
-  return (
-    <Drawer
-      variant="permanent"
-      sx={{
-        width: drawerWidth,
-        flexShrink: 0,
-        '& .MuiDrawer-paper': {
-          width: drawerWidth,
-          boxSizing: 'border-box',
-          backgroundColor: '#f8f9fa',
-        },
-      }}
-    >
-      <Toolbar>
-        <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 'bold' }}>
-          CivicFix Admin
-        </Typography>
-      </Toolbar>
-      <Divider />
-      <List component="nav" aria-label="Main">
-        {menuItems.map((item) => {
-          const selected = item.path ? isActive(item.path) : false;
-          return (
-            <ListItem key={item.text} disablePadding>
-              <ListItemButton
-                onClick={item.action || (() => navigate(item.path))}
-                selected={selected}
-                sx={{
-                  '&.Mui-selected': {
-                    backgroundColor: 'primary.main',
-                    color: 'white',
-                    '&:hover': { backgroundColor: 'primary.dark' },
-                  },
-                }}
-              >
-                <ListItemIcon sx={{ color: selected ? 'white' : 'inherit' }}>{item.icon}</ListItemIcon>
-                <ListItemText primary={item.text} />
-              </ListItemButton>
-            </ListItem>
-          );
-        })}
+  const content = (
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100%", p: 1.5 }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, px: 1, py: 1.5, mb: 1 }}>
+        <Logo />
+        <Box>
+          <Typography sx={{ fontWeight: 800, lineHeight: 1.1, letterSpacing: "-0.01em" }}>CivicFix</Typography>
+          <Typography variant="caption" color="text.secondary">Admin portal</Typography>
+        </Box>
+      </Box>
+      <List component="nav" aria-label="Main" sx={{ flexGrow: 1 }}>
+        {menuItems.map((item) => (
+          <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
+            <ListItemButton selected={isActive(item.path)} onClick={() => navigate(item.path)}>
+              <ListItemIcon sx={{ minWidth: 38 }}>{item.icon}</ListItemIcon>
+              <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 600, fontSize: 14 }} />
+            </ListItemButton>
+          </ListItem>
+        ))}
       </List>
+      <List>
+        <ListItem disablePadding>
+          <ListItemButton onClick={handleLogout}>
+            <ListItemIcon sx={{ minWidth: 38 }}><LogoutIcon /></ListItemIcon>
+            <ListItemText primary="Logout" primaryTypographyProps={{ fontWeight: 600, fontSize: 14 }} />
+          </ListItemButton>
+        </ListItem>
+      </List>
+    </Box>
+  );
+
+  const paperSx = { width: DRAWER_WIDTH, boxSizing: "border-box", borderRight: 1, borderColor: "divider", bgcolor: "background.paper" };
+
+  return desktop ? (
+    <Drawer variant="permanent" sx={{ width: DRAWER_WIDTH, flexShrink: 0, "& .MuiDrawer-paper": paperSx }}>
+      {content}
+    </Drawer>
+  ) : (
+    <Drawer variant="temporary" open={mobileOpen} onClose={onMobileClose} ModalProps={{ keepMounted: true }} sx={{ "& .MuiDrawer-paper": paperSx }}>
+      {content}
     </Drawer>
   );
 };

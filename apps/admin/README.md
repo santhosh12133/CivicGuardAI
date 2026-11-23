@@ -1,6 +1,6 @@
 # CivicFix admin portal
 
-React 19 + Vite + MUI web app for municipal staff and administrators: triage reports, update status and category, post notes and resolution photos, see statistics, and manage staff accounts.
+React 19 + Vite + MUI web app (charts: MUI X Charts; map: Leaflet with OpenStreetMap tiles, no API key) for municipal staff and administrators: triage reports, update status and category, post notes and resolution photos, see statistics, and manage staff accounts.
 
 ## Quick start
 
@@ -26,8 +26,9 @@ Sign in with a staff or admin account (`npm run create-staff` in `apps/api/`). C
 ```text
 src/
 ├── api/api.js        axios client: token storage, silent refresh, sign-out on expiry
-├── pages/            Login, Overview (stats), Dashboard (issue list), IssueDetails, Staff
-├── components/       Sidebar, Topbar
+├── pages/            Login, Overview (stats + charts), Dashboard (issue list), MapView, IssueDetails, Staff
+├── components/       Sidebar, Topbar, IssueMap (Leaflet + OpenStreetMap)
+├── theme/            Brand theme, light/dark mode
 ├── categories.js     category labels
 └── App.jsx           routes and the protected layout
 ```
@@ -35,8 +36,9 @@ src/
 | Route | Page | Access |
 |---|---|---|
 | `/login` | Sign in, forgot password, Google | Public |
-| `/` | Overview statistics | Staff, admin |
-| `/issues` | Issue list with filters and search | Staff, admin |
+| `/` | Overview: counts, trend charts, workload | Staff, admin |
+| `/issues` | Issue list with filters (status, category, assignee, priority, overdue) and search | Staff, admin |
+| `/map` | All issues on a map | Staff, admin |
 | `/issue/:id` | Issue detail and updates | Staff, admin |
 | `/staff` | Staff management | Admin |
 

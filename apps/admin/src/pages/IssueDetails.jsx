@@ -18,9 +18,8 @@ import {
 import BackIcon from "@mui/icons-material/ArrowBack";
 import UploadIcon from "@mui/icons-material/CloudUpload";
 import { issuesAPI } from "../api/api";
-import { useCategories, categoryLabel, STATUS_COLORS } from "../categories";
-
-const STATUSES = ["Open", "In Progress", "Resolved"];
+import { useCategories, categoryLabel, STATUS_COLORS, STATUSES, PRIORITIES, priorityOf, formatDay, currentUser } from "../categories";
+import IssueMap from "../components/IssueMap";
 
 const Field = ({ label, children }) => (
   <Box sx={{ mb: 2.5 }}>
@@ -47,7 +46,7 @@ const authorText = (author) => {
 const Timeline = ({ updates }) => (
   <Stack spacing={1.5} component="ol" sx={{ listStyle: "none", p: 0, m: 0 }} aria-label="Timeline">
     {updates.map((update) => (
-      <Box component="li" key={update.id} sx={{ borderLeft: "3px solid", borderColor: STATUS_COLORS[update.to_status] ? `${STATUS_COLORS[update.to_status]}.main` : "grey.300", pl: 1.5 }}>
+      <Box component="li" key={update.id} sx={{ borderLeft: "3px solid", borderColor: STATUS_COLORS[update.to_status] ? `${STATUS_COLORS[update.to_status]}.main` : "divider", pl: 1.5 }}>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap" }}>
           <Typography variant="body2" sx={{ fontWeight: 600 }}>{describeUpdate(update)}</Typography>
           <Typography variant="caption" color="text.secondary">
@@ -62,6 +61,81 @@ const Timeline = ({ updates }) => (
     ))}
   </Stack>
 );
+
+// Internal triage: who handles the issue, how urgent it is, and by when. Not shown to citizens.
+const TriageCard = ({ issue, onSaved, onError }) => {
+  const [assignees, setAssignees] = useState([]);
+  const [assignedTo, setAssignedTo] = useState(issue.assignee?.id || "");
+  const [priority, setPriority] = useState(issue.priority || "normal");
+  const [dueDate, setDueDate] = useState(issue.due_date || "");
+  const [saving, setSaving] = useState(false);
+  const myId = currentUser()?.id;
+
+  useEffect(() => {
+    issuesAPI.assignees().then(setAssignees).catch(() => {});
+  }, []);
+  useEffect(() => {
+    setAssignedTo(issue.assignee?.id || "");
+    setPriority(issue.priority || "normal");
+    setDueDate(issue.due_date || "");
+  }, [issue]);
+
+  const changes = {
+    ...(assignedTo !== (issue.assignee?.id || "") && { assigned_to: assignedTo || null }),
+    ...(priority !== (issue.priority || "normal") && { priority }),
+    ...(dueDate !== (issue.due_date || "") && { due_date: dueDate || null }),
+  };
+  const dirty = Object.keys(changes).length > 0;
+
+  const save = async () => {
+    try {
+      setSaving(true);
+      onSaved(await issuesAPI.update(issue.id, changes), "Assignment saved.");
+    } catch (err) {
+      onError(err.response?.data?.message || err.message || "Failed to save the assignment");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardContent>
+        <Typography variant="h6" gutterBottom>Assignment and priority</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Internal: citizens don&apos;t see this.</Typography>
+        <Stack spacing={2}>
+          <TextField select label="Assigned to" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} fullWidth>
+            <MenuItem value="">Unassigned</MenuItem>
+            {assignees.map((a) => (
+              <MenuItem key={a.id} value={a.id}>{a.id === myId ? `${a.name} (me)` : a.name}</MenuItem>
+            ))}
+          </TextField>
+          <Stack direction="row" spacing={2}>
+            <TextField select label="Priority" value={priority} onChange={(e) => setPriority(e.target.value)} fullWidth>
+              {PRIORITIES.map((p) => <MenuItem key={p.id} value={p.id}>{p.label}</MenuItem>)}
+            </TextField>
+            <TextField
+              label="Due date"
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              fullWidth
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+          </Stack>
+          <Stack direction="row" spacing={1}>
+            {assignedTo !== myId && (
+              <Button variant="outlined" onClick={() => setAssignedTo(myId)} disabled={!myId}>Assign to me</Button>
+            )}
+            <Button variant="contained" onClick={save} disabled={saving || !dirty} sx={{ flexGrow: 1 }}>
+              {saving ? <CircularProgress size={20} /> : "Save assignment"}
+            </Button>
+          </Stack>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+};
 
 const IssueDetails = () => {
   const { id } = useParams();
@@ -175,7 +249,7 @@ const IssueDetails = () => {
   }
 
   return (
-    <Box sx={{ p: 3, maxWidth: 1200 }}>
+    <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1280 }}>
       <Box sx={{ display: "flex", alignItems: "center", mb: 3 }}>
         <Button startIcon={<BackIcon />} onClick={() => navigate("/issues")} sx={{ mr: 2 }}>
           Back to issues
@@ -202,7 +276,7 @@ const IssueDetails = () => {
               {issue.title}
             </Typography>
 
-            <Stack direction="row" spacing={1} sx={{ mb: 2.5 }}>
+            <Stack direction="row" spacing={1} sx={{ mb: 2.5, flexWrap: "wrap", gap: 1 }}>
               <Chip label={issue.status} color={STATUS_COLORS[issue.status] || "default"} />
               <Chip label={categoryLabel(categories, issue.category)} variant="outlined" />
               <Chip
@@ -210,6 +284,12 @@ const IssueDetails = () => {
                 color={issue.needs_review ? "error" : "success"}
                 variant={issue.needs_review ? "filled" : "outlined"}
               />
+              {issue.priority && issue.priority !== "normal" && (
+                <Chip label={`${priorityOf(issue.priority).label} priority`} color={priorityOf(issue.priority).color} />
+              )}
+              {issue.is_overdue && (
+                <Chip label={issue.due_date ? `Overdue (due ${formatDay(issue.due_date)})` : "Overdue"} color="error" variant="outlined" />
+              )}
             </Stack>
 
             <Field label="Description">
@@ -233,7 +313,8 @@ const IssueDetails = () => {
             )}
 
             <Field label="Location">
-              <Typography variant="body2" color="text.secondary">
+              <IssueMap issues={[issue]} categories={categories} height={260} />
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                 {issue.latitude}, {issue.longitude} ·{" "}
                 <a href={`https://www.google.com/maps/search/?api=1&query=${issue.latitude},${issue.longitude}`} target="_blank" rel="noreferrer">
                   Open in Google Maps
@@ -261,6 +342,18 @@ const IssueDetails = () => {
         </Card>
 
         <Stack spacing={2}>
+          <TriageCard
+            issue={issue}
+            onSaved={(data, message) => {
+              applyIssue(data);
+              setError("");
+              setSaved(message);
+            }}
+            onError={(message) => {
+              setSaved("");
+              setError(message);
+            }}
+          />
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>Update this issue</Typography>

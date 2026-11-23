@@ -6,6 +6,9 @@ import {
   Box,
   Button,
   Chip,
+  Avatar,
+  IconButton,
+  Tooltip,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -13,7 +16,11 @@ import {
   TextField,
   Alert,
 } from '@mui/material';
-import AccountCircle from '@mui/icons-material/AccountCircle';
+import MenuIcon from '@mui/icons-material/Menu';
+import DarkModeIcon from '@mui/icons-material/DarkModeOutlined';
+import LightModeIcon from '@mui/icons-material/LightModeOutlined';
+import { useLocation } from 'react-router-dom';
+import { useColorMode } from '../theme/ColorMode';
 import { authAPI } from '../api/api';
 
 const ChangePasswordDialog = ({ open, onClose }) => {
@@ -84,25 +91,49 @@ const ChangePasswordDialog = ({ open, onClose }) => {
   );
 };
 
-const Topbar = ({ user }) => {
+const PAGE_TITLES = [
+  ['/issue/', 'Issue'],
+  ['/issues', 'Issues'],
+  ['/map', 'Map'],
+  ['/staff', 'Staff'],
+  ['/', 'Overview'],
+];
+
+const Topbar = ({ user, onMenuClick }) => {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const { mode, toggle } = useColorMode();
+  const { pathname } = useLocation();
+  const title = (PAGE_TITLES.find(([prefix]) => (prefix === '/' ? pathname === '/' : pathname.startsWith(prefix))) || [])[1];
+  const name = user?.name || user?.email || 'Officer';
+  const nextMode = mode === 'dark' ? 'light' : 'dark';
 
   return (
     <AppBar
       position="static"
+      color="inherit"
       elevation={0}
-      sx={{ backgroundColor: 'white', color: 'text.primary', borderBottom: '1px solid #e5e7eb' }}
+      sx={{ bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider' }}
     >
-      <Toolbar>
-        <Typography variant="h6" component="div" sx={{ flexGrow: 1, fontWeight: 'bold' }}>
-          CivicFix Officer Panel
+      <Toolbar sx={{ gap: 1 }}>
+        <IconButton edge="start" onClick={onMenuClick} aria-label="Open menu" sx={{ display: { md: 'none' } }}>
+          <MenuIcon />
+        </IconButton>
+        <Typography variant="subtitle1" component="div" sx={{ flexGrow: 1, fontWeight: 600, color: 'text.secondary' }}>
+          {title}
         </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <AccountCircle sx={{ color: 'primary.main' }} />
-          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            {user?.name || user?.email || 'Officer'}
-          </Typography>
-          {user?.role && <Chip size="small" label={user.role} />}
+        <Tooltip title={`Switch to ${nextMode} mode`}>
+          <IconButton onClick={toggle} aria-label={`Switch to ${nextMode} mode`}>
+            {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
+          </IconButton>
+        </Tooltip>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, ml: 1 }}>
+          <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main', fontSize: 14, fontWeight: 700 }}>
+            {name.trim()[0]?.toUpperCase() || '?'}
+          </Avatar>
+          <Box sx={{ display: { xs: 'none', sm: 'block' }, lineHeight: 1.2 }}>
+            <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>{name}</Typography>
+            {user?.role && <Chip size="small" label={user.role} sx={{ height: 18, fontSize: 11, textTransform: 'capitalize' }} />}
+          </Box>
           <Button size="small" onClick={() => setDialogOpen(true)}>Change password</Button>
         </Box>
       </Toolbar>

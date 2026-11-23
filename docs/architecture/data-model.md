@@ -5,6 +5,7 @@ All data lives in one PostgreSQL database (version 17 on AWS). Models are define
 ```mermaid
 erDiagram
   users ||--o{ issues : "reports (user_id)"
+  users |o--o{ issues : "handles (assigned_to)"
   users ||--o{ issue_updates : "writes (user_id)"
   users ||--o{ sessions : "signs in"
   issues ||--o{ issue_updates : "timeline"
@@ -36,6 +37,9 @@ erDiagram
     string phash
     bool needs_review
     uuid user_id FK
+    string priority "low | normal | high | urgent"
+    uuid assigned_to FK
+    date due_date
     timestamp created_at
   }
   issue_updates {
@@ -109,6 +113,9 @@ Every account has at least one way to sign in: an email with a password, a phone
 | `phash` | string, nullable | 64-bit perceptual hash (hex) for duplicate detection |
 | `needs_review` | boolean | Set when evidence is uncertain (see [Evidence validation](evidence-validation.md)) |
 | `user_id` | UUID FK → `users`, nullable | Reporter. `ON DELETE SET NULL` keeps the issue if the account is removed |
+| `priority` | string(10) | `low`, `normal` (default), `high`, `urgent`. Staff only |
+| `assigned_to` | UUID FK → `users`, nullable | Staff member or admin handling it; `SET NULL` if removed. Staff only |
+| `due_date` | date, nullable | Target resolution date. Staff only. Unresolved past this date (or, without one, older than 7 days) counts as overdue |
 | `created_at` | timestamp | No `updated_at`; changes are recorded in `issue_updates` |
 
 Categories (`apps/api/src/constants/categories.js`, served at `GET /api/issues/categories`): `pothole`, `road_damage`, `streetlight`, `garbage`, `water_supply`, `drainage`, `traffic_signal`, `fallen_tree`, `other`.

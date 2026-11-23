@@ -34,10 +34,11 @@ The CivicFix REST API, used by the admin portal and the Android app.
 | POST | `/api/auth/users/:id/reset-password` | Admin | Issue a temporary password |
 | GET | `/api/issues` | Public (richer when signed in) | List issues |
 | GET | `/api/issues/categories` | Public | Category list |
-| GET | `/api/issues/stats` | Staff, admin | Dashboard statistics |
+| GET | `/api/issues/stats` | Staff, admin | Dashboard statistics and daily trends |
+| GET | `/api/issues/assignees` | Staff, admin | People issues can be assigned to |
 | GET | `/api/issues/:id` | Public (richer when signed in) | Issue with timeline |
 | POST | `/api/issues` | Signed in | Report an issue |
-| PUT | `/api/issues/:id` | Staff, admin | Update status, category, note, photo |
+| PUT | `/api/issues/:id` | Staff, admin | Update status, category, note, photo, priority, assignee, due date |
 | DELETE | `/api/issues/:id` | Admin | Delete an issue and its photos |
 
 ## 2. Authentication
@@ -143,6 +144,7 @@ Issue reads are public, but responses depend on who is asking (send the bearer t
 | Issue, photos, category, status, timeline | ✓ | ✓ | ✓ |
 | `is_mine` | `false` | `true` | `true` only for their own |
 | `reporter` (`{ id, name, email }`) and `user_id` | — | — | ✓ |
+| Triage: `priority`, `assigned_to`, `assignee` (`{ id, name }`), `due_date`, `is_overdue` | — | — | ✓ |
 | Timeline author name of a citizen | hidden (`null`) | ✓ (their own) | ✓ |
 | Timeline author name of staff/admin | ✓ | ✓ | ✓ |
 
@@ -160,16 +162,28 @@ Query parameters (all optional):
 | `category` | a category id | Only that category |
 | `mine` | `true` | Only the signed-in user's reports (`401` when not signed in) |
 | `needs_review` | `true` | Only issues flagged for manual review |
+| `assigned_to` | `me`, `none`, or a user id | Staff only: assigned to the signed-in user, unassigned, or that person |
+| `priority` | `low`, `normal`, `high`, `urgent` | Staff only |
+| `overdue` | `true` | Staff only: unresolved and past `due_date`, or (without one) open for more than 7 days |
 
-Unknown values return `400`.
+Unknown values return `400`; the staff-only filters return `403` for citizens.
 
 ### GET `/api/issues/categories`
 
 Public. Returns `[{ "id": "pothole", "label": "Pothole" }, ...]`. Current ids: `pothole`, `road_damage`, `streetlight`, `garbage`, `water_supply`, `drainage`, `traffic_signal`, `fallen_tree`, `other`.
 
+### GET `/api/issues/assignees`
+
+Staff and admin only. The people an issue can be assigned to: every staff member and admin, `[{ "id", "name", "role" }]`, sorted by name.
+
 ### GET `/api/issues/stats`
 
 Staff and admin only (`401` without a token, `403` for citizens).
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `from`, `to` | the last 30 days, ending today | Range for `range` (YYYY-MM-DD, at most 366 days) |
+| `tz` | `UTC` | IANA time zone used to decide which day something happened, e.g. `Asia/Kolkata` |
 
 ```json
 {
@@ -179,11 +193,27 @@ Staff and admin only (`401` without a token, `403` for citizens).
   "needsReview": 4,
   "overdue": 6,
   "last7Days": { "reported": 11, "resolved": 5 },
-  "avgResolutionHours": 51.3
+  "avgResolutionHours": 51.3,
+  "unresolvedByPriority": { "low": 2, "normal": 21, "high": 6, "urgent": 3 },
+  "assignment": {
+    "mine": 4,
+    "unassigned": 9,
+    "byAssignee": [{ "id": "…", "name": "Ward Officer", "open": 3, "inProgress": 2 }]
+  },
+  "range": {
+    "from": "2026-10-25", "to": "2026-11-23", "timeZone": "Asia/Kolkata",
+    "reported": 30, "resolved": 18, "avgResolutionHours": 40.2,
+    "byCategory": { "pothole": 11, "...": 0 },
+    "daily": [{ "date": "2026-10-25", "reported": 1, "resolved": 0 }, "… one entry per day …"]
+  }
 }
 ```
 
-`needsReview` counts unresolved flagged issues; `overdue` counts unresolved issues older than 7 days; `avgResolutionHours` is the mean time from report to first "Resolved" for issues resolved now (`null` if none).
+- `needsReview` counts unresolved flagged issues.
+- `overdue` counts unresolved issues past their `due_date`, or without one, open for more than 7 days.
+- `avgResolutionHours` is the mean time from report to first "Resolved" for issues resolved now (`null` if none); `range.avgResolutionHours` is the same for issues first resolved within the range.
+- `range.daily` has an entry for every day, including days with nothing reported. "Resolved" counts each issue once, on the day it was first resolved.
+- Invalid dates, reversed or too-long ranges, and unknown time zones return `400`.
 
 ### GET `/api/issues/:id`
 
@@ -267,9 +297,14 @@ Optional fields include:
   "status": "In Progress",
   "category": "drainage",
   "note": "Crew scheduled for Monday",
-  "photo_url": "https://example.com/resolution.jpg"
+  "photo_url": "https://example.com/resolution.jpg",
+  "priority": "high",
+  "assigned_to": "<user id of a staff member or admin>",
+  "due_date": "2026-11-30"
 }
 ```
+
+Triage fields: `priority` is `low`, `normal`, `high` or `urgent`; `assigned_to` must be a staff member or admin (`""` or `null` unassigns); `due_date` is YYYY-MM-DD (`""` or `null` clears it). They are internal and add no timeline entry.
 
 `note` (up to 1000 characters) is shown to citizens in the timeline; a note on its own is a valid update. A status change, note or uploaded photo each add a timeline entry. An optional multipart `image` is stored as the resolution photo when the issue is (or becomes) `Resolved`, otherwise as the issue photo; earlier photos stay in the timeline.
 

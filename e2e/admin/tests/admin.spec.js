@@ -82,6 +82,79 @@ test('overview cards open the issue list with the matching filter', async ({ pag
   await expect(rows(page).first()).toContainText('Streetlight out near bus stop');
 });
 
+test('overview charts follow the chosen period and show the workload', async ({ page }) => {
+  await login(page, seed.admin.email, seed.admin.password);
+  await expect(page.getByTestId('trend-chart')).toBeVisible();
+  await page.getByRole('button', { name: '7 days', exact: true }).click();
+  await expect(page.getByRole('img', { name: /Reported and resolved per day: 3 reported/ })).toBeVisible();
+  await expect(stat(page, 'Unassigned')).toHaveText('3');
+  await expect(stat(page, 'Assigned to me')).toHaveText('0');
+  await expect(page.getByText('No issues are assigned yet')).toBeVisible();
+});
+
+test('the map shows every unresolved issue and opens one', async ({ page }) => {
+  await login(page, seed.admin.email, seed.admin.password);
+  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Map' })).toBeVisible();
+  await expect(page.getByTestId('map-count')).toHaveText('Showing 3 of 3 issues');
+  const markers = page.locator('[data-testid="issue-map"] path.leaflet-interactive');
+  await expect(markers).toHaveCount(3);
+
+  await page.getByRole('combobox', { name: 'Category' }).click();
+  await page.getByRole('option', { name: 'Garbage', exact: true }).click();
+  await expect(markers).toHaveCount(1);
+  await markers.first().click({ force: true });
+  await expect(page.getByText('Garbage pile on 5th Cross').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Open issue' }).click();
+  await expect(page.getByRole('heading', { name: 'Garbage pile on 5th Cross' })).toBeVisible();
+});
+
+test('an issue can be assigned with a priority and due date, and filtered by them', async ({ page }) => {
+  await login(page, seed.admin.email, seed.admin.password);
+  await page.goto(`/issue/${seed.issues.pothole}`);
+  await expect(page.getByText('Internal: citizens don')).toBeVisible();
+  await page.getByRole('button', { name: 'Assign to me' }).click();
+  await pickOption(page, 'Priority', 'Urgent');
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const offset = yesterday.getTimezoneOffset() * 60000;
+  await page.getByLabel('Due date').fill(new Date(yesterday.getTime() - offset).toISOString().slice(0, 10));
+  await page.getByRole('button', { name: 'Save assignment' }).click();
+  await expect(page.getByText('Assignment saved.')).toBeVisible();
+  await expect(page.getByText('Urgent priority')).toBeVisible();
+  await expect(page.getByText(/^Overdue \(due /)).toBeVisible();
+
+  // Not part of the citizen's timeline.
+  const timeline = page.getByRole('list', { name: 'Timeline' });
+  await expect(timeline.getByRole('listitem')).toHaveCount(1);
+
+  await page.getByRole('button', { name: 'Issues', exact: true }).click();
+  await pickOption(page, 'Assigned to', 'Me');
+  await expect(rows(page)).toHaveCount(1);
+  await expect(rows(page).first()).toContainText('Deep pothole on MG Road');
+  await expect(rows(page).first()).toContainText('Urgent');
+  await pickOption(page, 'Assigned to', 'Unassigned');
+  await expect(rows(page)).toHaveCount(2);
+  await pickOption(page, 'Assigned to', 'Anyone');
+  await page.getByRole('button', { name: 'Show overdue' }).click();
+  await expect(rows(page)).toHaveCount(1);
+
+  await page.goto('/');
+  await expect(stat(page, 'Assigned to me')).toHaveText('1');
+  await expect(stat(page, 'Overdue')).toHaveText('1');
+  await expect(page.getByRole('table', { name: 'Workload' })).toContainText('E2E Admin');
+});
+
+test('dark mode can be switched on and is remembered', async ({ page }) => {
+  await login(page, seed.admin.email, seed.admin.password);
+  await page.getByRole('button', { name: 'Switch to dark mode' }).click();
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(11, 17, 32)');
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Switch to light mode' })).toBeVisible();
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(11, 17, 32)');
+  await page.getByRole('button', { name: 'Switch to light mode' }).click();
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(245, 247, 251)');
+});
+
 test('the issue list shows category and reporter, and filters and searches', async ({ page }) => {
   await login(page, seed.admin.email, seed.admin.password);
   await page.getByRole('button', { name: 'Issues', exact: true }).click();

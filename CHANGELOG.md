@@ -6,6 +6,8 @@ All notable changes to CivicFix are recorded here. The format follows [Keep a Ch
 
 ### Added
 
+- **Admin dashboard:** refreshed design with light/dark mode and a mobile-friendly layout; Overview charts (reported vs resolved for 7/30/90 days, status, open work by priority, workload per person); a **Map** of all issues (OpenStreetMap); issue **assignment, priority and due dates** with "Assign to me", list columns, filters (me / unassigned / person, priority, overdue) and overdue highlighting.
+- **API:** `priority`, `assigned_to`, `due_date` on issues (staff-only), `GET /api/issues/assignees`, triage filters on `GET /api/issues`, and date-range statistics with a daily series on `GET /api/issues/stats`.
 - **Docker Compose deployment on Oracle Cloud** (`docker-compose.yml`, `deploy/`): `oracle-cloudshell-create.sh` creates an Always Free VM from Cloud Shell that installs itself; `setup-server.sh` runs CivicFix with its own Caddy (free HTTPS) or behind Medical Claim AI's Caddy on a shared server; daily backups; admin portal Docker image. Tested on x86_64 and arm64 in CI.
 - **Sign-in:** phone number + SMS code (Amazon SNS, India DLT), Sign in with Google, and "Forgot password" with an emailed code (Amazon SES), in both the admin portal and the app. Each method switches on only when configured (`GET /api/auth/providers`).
 - **Secure sessions:** 15-minute access tokens, rotating refresh tokens with reuse detection, server-side sign-out, "sign out everywhere", other devices signed out after a password change, account lockout after five wrong passwords, stricter rate limit on sign-in endpoints.

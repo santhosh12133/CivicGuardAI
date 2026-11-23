@@ -22,7 +22,7 @@ What makes reports trustworthy: the server checks every photo's embedded date (t
 | Role | Uses | Can |
 |---|---|---|
 | Citizen | Android app | Sign up (email, phone or Google); report issues; browse all issues; follow own reports |
-| Staff | Admin portal | Everything above, plus see who reported; change status and category; add notes and resolution photos; view statistics |
+| Staff | Admin portal | Everything above, plus see who reported; assign, prioritise and set due dates; change status and category; add notes and resolution photos; view statistics and the map |
 | Admin | Admin portal | Everything staff can, plus delete issues; add staff; change roles; reset passwords |
 
 ## Features
@@ -44,9 +44,11 @@ What makes reports trustworthy: the server checks every photo's embedded date (t
 | Page | Features |
 |---|---|
 | Sign in | Email + password; Google (existing staff only); forgot password |
-| Overview | Counts by status and category, needs review, overdue (> 7 days), reported in the last 7 days, average time to resolve; each card links to the filtered list |
-| Issues | Table with status, category, reporter, date; filters for status, category and needs review; search |
-| Issue detail | Photo, location, reporter, timeline; change status and category; add a note for the citizen; upload a resolution photo; delete (admin) |
+| Overview | Counts by status, needs review, overdue, assigned to me and unassigned (each links to the filtered list); reported-vs-resolved trend for 7/30/90 days; status chart; categories; open work by priority; workload per person |
+| Issues | Table with status, category, priority, assignee, due date, reporter; filters for status, category, assignee (me / unassigned / person), priority, overdue and needs review; search; overdue rows highlighted |
+| Map | All issues on OpenStreetMap, coloured by status (urgent ringed in red), filtered by status and category; each dot opens its issue |
+| Issue detail | Photo, location map, reporter, timeline; assign (or "Assign to me"), priority and due date (internal); change status and category; add a note for the citizen; upload a resolution photo; delete (admin) |
+| Everywhere | Light and dark mode (remembered per browser); works on tablets and phones |
 | Staff (admin) | List staff and admins; add with a one-time password; change role; reset password |
 
 ## Core journey
@@ -81,8 +83,8 @@ In scope today:
 Not in scope yet (candidates for the roadmap):
 
 - Push or email notifications when a report's status changes
-- Assigning issues to specific staff or departments; SLAs per category
-- Map view of all issues in the portal
+- Departments and SLAs per category (issues can be assigned to people, with due dates)
+- Notifications to staff when an issue is assigned to them
 - Multiple languages
 - Public web page for citizens without the app
 - Self-service account deletion and data export

@@ -19,9 +19,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { issuesAPI } from "../api/api";
-import { useCategories, categoryLabel, STATUS_COLORS, currentUser } from "../categories";
-
-const STATUSES = ["Open", "In Progress", "Resolved"];
+import { useCategories, categoryLabel, STATUS_COLORS, STATUSES, PRIORITIES, priorityOf, formatDay, currentUser } from "../categories";
 
 const formatDate = (value) => {
   if (!value) return "";
@@ -43,6 +41,11 @@ const Dashboard = () => {
   const statusFilter = searchParams.get("status") || "";
   const categoryFilter = searchParams.get("category") || "";
   const reviewOnly = searchParams.get("review") === "1";
+  const assignedFilter = searchParams.get("assigned") || "";
+  const priorityFilter = searchParams.get("priority") || "";
+  const overdueOnly = searchParams.get("overdue") === "1";
+  const myId = currentUser()?.id;
+  const [assignees, setAssignees] = useState([]);
   const setFilter = (key, value) => {
     const next = new URLSearchParams(searchParams);
     if (value) next.set(key, value);
@@ -68,6 +71,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchIssues();
+    issuesAPI.assignees().then(setAssignees).catch(() => {});
   }, []);
 
   const handleDelete = async (id) => {
@@ -110,6 +114,37 @@ const Dashboard = () => {
       headerName: "Status",
       width: 130,
       renderCell: (params) => <Chip label={params.value} color={STATUS_COLORS[params.value] || "default"} size="small" />,
+    },
+    {
+      field: "priority",
+      headerName: "Priority",
+      width: 110,
+      sortComparator: (a, b) => PRIORITIES.findIndex((p) => p.id === a) - PRIORITIES.findIndex((p) => p.id === b),
+      renderCell: (params) => {
+        const priority = priorityOf(params.value);
+        return <Chip label={priority.label} color={priority.color} size="small" variant={params.value === "urgent" ? "filled" : "outlined"} />;
+      },
+    },
+    {
+      field: "assignee",
+      headerName: "Assigned to",
+      width: 160,
+      valueGetter: (value) => value?.name || "",
+      renderCell: (params) =>
+        params.row.assignee ? params.row.assignee.name : <Typography variant="body2" color="text.secondary">Unassigned</Typography>,
+    },
+    {
+      field: "due_date",
+      headerName: "Due",
+      width: 130,
+      renderCell: (params) =>
+        params.row.due_date ? (
+          <Typography variant="body2" color={params.row.is_overdue ? "error" : "text.primary"} sx={{ fontWeight: params.row.is_overdue ? 700 : 400 }}>
+            {formatDay(params.row.due_date)}
+          </Typography>
+        ) : params.row.is_overdue ? (
+          <Chip label="Overdue" color="error" size="small" variant="outlined" />
+        ) : "—",
     },
     {
       field: "needs_review",
@@ -176,16 +211,21 @@ const Dashboard = () => {
       if (reviewOnly && !issue.needs_review) return false;
       if (statusFilter && issue.status !== statusFilter) return false;
       if (categoryFilter && issue.category !== categoryFilter) return false;
+      if (priorityFilter && issue.priority !== priorityFilter) return false;
+      if (overdueOnly && !issue.is_overdue) return false;
+      if (assignedFilter === "me" && issue.assignee?.id !== myId) return false;
+      if (assignedFilter === "none" && issue.assignee) return false;
+      if (assignedFilter && !["me", "none"].includes(assignedFilter) && issue.assignee?.id !== assignedFilter) return false;
       if (!q) return true;
       return [issue.title, issue.description, issue.status, issue.address, issue.reporter?.name, categoryLabel(categories, issue.category)]
         .some((value) => (value || "").toLowerCase().includes(q));
     });
-  }, [issues, search, reviewOnly, statusFilter, categoryFilter, categories]);
+  }, [issues, search, reviewOnly, statusFilter, categoryFilter, priorityFilter, overdueOnly, assignedFilter, myId, categories]);
 
   const reviewCount = issues.filter((issue) => issue.needs_review).length;
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: { xs: 2, md: 3 } }}>
       <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2, flexWrap: "wrap", gap: 1 }}>
         <Typography variant="h4" component="h1">
           Issues
@@ -224,6 +264,40 @@ const Dashboard = () => {
               <MenuItem key={category.id} value={category.id}>{category.label}</MenuItem>
             ))}
           </TextField>
+          <TextField
+            select
+            size="small"
+            label="Assigned to"
+            value={assignedFilter}
+            onChange={(e) => setFilter("assigned", e.target.value)}
+            sx={{ minWidth: 160 }}
+          >
+            <MenuItem value="">Anyone</MenuItem>
+            <MenuItem value="me">Me</MenuItem>
+            <MenuItem value="none">Unassigned</MenuItem>
+            {assignees.filter((a) => a.id !== myId).map((a) => (
+              <MenuItem key={a.id} value={a.id}>{a.name}</MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            size="small"
+            label="Priority"
+            value={priorityFilter}
+            onChange={(e) => setFilter("priority", e.target.value)}
+            sx={{ minWidth: 130 }}
+          >
+            <MenuItem value="">Any priority</MenuItem>
+            {PRIORITIES.map((p) => <MenuItem key={p.id} value={p.id}>{p.label}</MenuItem>)}
+          </TextField>
+          <Button
+            variant={overdueOnly ? "contained" : "outlined"}
+            color={overdueOnly ? "error" : "inherit"}
+            size="small"
+            onClick={() => setFilter("overdue", overdueOnly ? "" : "1")}
+          >
+            {overdueOnly ? "Overdue only" : "Show overdue"}
+          </Button>
           <Button
             variant={reviewOnly ? "contained" : "outlined"}
             color={reviewOnly ? "error" : "inherit"}
@@ -246,7 +320,7 @@ const Dashboard = () => {
         </Alert>
       )}
 
-      <Paper sx={{ p: 2, borderRadius: 2, boxShadow: 2 }}>
+      <Paper variant="outlined" sx={{ p: { xs: 1, md: 2 }, borderRadius: 3 }}>
         {loading ? (
           <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
             <CircularProgress />
@@ -257,6 +331,7 @@ const Dashboard = () => {
               rows={filteredIssues}
               columns={columns}
               getRowId={(row) => row.id}
+              getRowClassName={(params) => (params.row.is_overdue ? "row-overdue" : "")}
               rowHeight={56}
               pageSizeOptions={[10, 25, 50]}
               disableRowSelectionOnClick
@@ -266,8 +341,8 @@ const Dashboard = () => {
               localeText={{ noRowsLabel: "No issues match these filters" }}
               sx={{
                 border: "none",
-                "& .MuiDataGrid-columnHeaders": { backgroundColor: "#f8f9fa" },
-                "& .MuiDataGrid-row:hover": { backgroundColor: "#fbfdff" },
+                "& .MuiDataGrid-columnHeaderTitle": { fontWeight: 700 },
+                "& .row-overdue": { boxShadow: (theme) => `inset 3px 0 0 ${theme.palette.error.main}` },
               }}
             />
           </Box>
