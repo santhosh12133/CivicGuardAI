@@ -228,9 +228,10 @@ export const SectionTitle = ({ children, style, right }) => (
 export const ListRow = ({ icon, title, subtitle, onPress, tone, testID, right, last }) => (
   <Pressable
     onPress={onPress}
+    disabled={!onPress}
     testID={testID}
-    accessibilityRole="button"
-    android_ripple={{ color: "rgba(15,23,42,0.06)" }}
+    accessibilityRole={onPress ? "button" : undefined}
+    android_ripple={onPress ? { color: "rgba(15,23,42,0.06)" } : undefined}
     style={[styles.row, !last && styles.rowDivider]}
   >
     <View style={[styles.rowIcon, tone === "danger" && { backgroundColor: colors.dangerSoft }]}>

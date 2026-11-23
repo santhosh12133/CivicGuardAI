@@ -111,7 +111,7 @@ const IssueDetailScreen = ({ navigation }) => {
   if (error && !issue) {
     return (
       <View style={styles.screen}>
-        <TopBar onBack={goBack} title="Report" />
+        <TopBar onBack={goBack} title="Report details" />
         <EmptyState
           icon="alert-circle-outline"
           title="Could not load this report"
@@ -125,7 +125,7 @@ const IssueDetailScreen = ({ navigation }) => {
   if (!issue) {
     return (
       <View style={styles.screen}>
-        <TopBar onBack={goBack} title="Report" />
+        <TopBar onBack={goBack} title="Report details" />
         <LoadingDetail />
       </View>
     );
@@ -137,7 +137,7 @@ const IssueDetailScreen = ({ navigation }) => {
 
   return (
     <View style={styles.screen}>
-      <TopBar onBack={goBack} title="Report" />
+      <TopBar onBack={goBack} title="Report details" />
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.brand]} />}

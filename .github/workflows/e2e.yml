@@ -193,8 +193,10 @@ jobs:
           python3 - <<'PY'
           import base64, glob, io, os
           from PIL import Image
-          paths = sorted(glob.glob("mobile-e2e-results/**/*.png", recursive=True))
-          print(f"{len(paths)} screenshots")
+          # Maestro versions differ in where takeScreenshot writes; look in all of them.
+          roots = ["mobile-e2e-results", "e2e/mobile", os.path.expanduser("~/.maestro/tests")]
+          paths = sorted({p for root in roots for p in glob.glob(f"{root}/**/*.png", recursive=True)})
+          print(f"{len(paths)} screenshots:", ", ".join(paths)[:2000])
           for path in paths:
               if "/debug-" in path and "screenshot-" in os.path.basename(path):
                   continue  # Maestro's own failure captures
