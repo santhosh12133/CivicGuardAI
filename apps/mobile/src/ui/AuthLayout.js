@@ -1,9 +1,16 @@
-import React from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
-import { IconButton, Logo } from "./components";
-import { colors, space, type } from "./theme";
+import React from 'react';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import { IconButton, Logo } from './components';
+import { colors, space, type } from './theme';
 
 /**
  * Frame for the sign-in screens: logo or back button, a title, one line of
@@ -13,11 +20,17 @@ const AuthLayout = ({ title, subtitle, children, footer, back = false }) => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   return (
-    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView
+      style={styles.root}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + (back ? space.sm : 48), paddingBottom: insets.bottom + space.xxl },
+          {
+            paddingTop: insets.top + (back ? space.sm : 48),
+            paddingBottom: insets.bottom + space.xxl,
+          },
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -34,7 +47,9 @@ const AuthLayout = ({ title, subtitle, children, footer, back = false }) => {
           <Logo size={52} />
         )}
         <Text style={[type.display, styles.title]}>{title}</Text>
-        {subtitle ? <Text style={[type.body, styles.subtitle]}>{subtitle}</Text> : null}
+        {subtitle ? (
+          <Text style={[type.body, styles.subtitle]}>{subtitle}</Text>
+        ) : null}
         <View style={styles.form}>{children}</View>
         {footer ? <View style={styles.footer}>{footer}</View> : null}
       </ScrollView>
@@ -49,7 +64,7 @@ const styles = StyleSheet.create({
   title: { marginTop: space.xxl },
   subtitle: { color: colors.muted, marginTop: space.sm },
   form: { marginTop: space.xxl + space.xs, gap: space.md + 2 },
-  footer: { flexGrow: 1, justifyContent: "flex-end", paddingTop: space.xxxl },
+  footer: { flexGrow: 1, justifyContent: 'flex-end', paddingTop: space.xxxl },
 });
 
 export default AuthLayout;
