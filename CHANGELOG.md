@@ -19,6 +19,7 @@ All notable changes to CivicFix are recorded here. The format follows [Keep a Ch
 
 ### Changed
 
+- **Android app redesign:** one design system (`apps/mobile/src/ui`) with the CivicFix palette and the admin dashboard's status colours; native screen transitions; loading placeholders; a Reported > In progress > Resolved progress tracker on cards and the issue screen; status filters with counts; a three-step report form; settings-style profile; shared sign-in layout.
 - **Repository layout:** the apps moved to `apps/api` (was `backend/`), `apps/admin` (was `admin/`) and `apps/mobile` (was `mobile/`); packages renamed `civicfix-api`, `civicfix-admin`, `civicfix-mobile`. Prettier config moved to the root.
 - Replaced the placeholder app icons and the portal's Vite icon with a CivicFix icon.
 - Report creation no longer logs request bodies, coordinates or EXIF details.
@@ -30,6 +31,8 @@ All notable changes to CivicFix are recorded here. The format follows [Keep a Ch
 
 ### Fixed
 
+- **Admin map:** OpenStreetMap refused the map tiles ("Access blocked") because the site sent no referrer; Caddy now sends `strict-origin-when-cross-origin` and `setup-server.sh` restarts Caddy so Caddyfile changes apply.
+- **Android app:** the issue screen now refreshes when shown and on pull-down, the resolution photo appears right under the progress tracker, and resolved cards show the fix photo.
 - New issues can no longer be created with a status other than `Open`.
 - The 24-hour photo rule could be bypassed by removing `DateTimeOriginal` (filesystem dates were used); only embedded dates count now.
 - Photos dated in the future were accepted.
