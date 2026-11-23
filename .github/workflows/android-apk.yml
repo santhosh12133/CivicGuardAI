@@ -66,7 +66,7 @@ jobs:
       ANDROID_VERSION_CODE: ${{ github.run_number }}
       EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Check API URL
         id: api
@@ -90,7 +90,7 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Building against $url"
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
@@ -101,7 +101,7 @@ jobs:
           cache: npm
           cache-dependency-path: apps/mobile/package-lock.json
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
 
       - name: Install dependencies
         working-directory: apps/mobile
@@ -168,7 +168,7 @@ jobs:
             echo "- Google Maps in app: $([ -n "$EXPO_PUBLIC_GOOGLE_MAPS_API_KEY" ] && echo yes || echo 'no (shows an Open in Maps link)')"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: civicfix-apk
           path: dist/*.apk
@@ -179,9 +179,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: civicfix-apk
           path: dist
@@ -202,7 +202,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
           script: bash .github/scripts/smoke-test-apk.sh dist/${{ needs.build.outputs.apk_name }} launch-test
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: launch-test-results
@@ -213,7 +213,7 @@ jobs:
     if: inputs.publish || startsWith(github.ref, 'refs/tags/mobile-v')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: civicfix-apk
           path: dist
