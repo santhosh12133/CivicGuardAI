@@ -1,6 +1,6 @@
 # Android end-to-end flows (Maestro)
 
-Run by `.github/workflows/e2e.yml` (via `.github/scripts/mobile-e2e.sh`) on an Android emulator against a real API seeded by `apps/api/test/e2e/seed.js`. Flows run in file-name order.
+Run by `.github/workflows/e2e.yml` (via `.github/scripts/mobile-e2e.sh`) on an Android emulator against a real API seeded by `apps/api/test/e2e/seed.js` with `SEED_RESOLVED=1` (adds a report the city team resolved with a photo; the browser tests run without it). Flows run in file-name order.
 
 | Flow | Checks |
 |---|---|
@@ -10,6 +10,7 @@ Run by `.github/workflows/e2e.yml` (via `.github/scripts/mobile-e2e.sh`) on an A
 | `04-profile-password.yaml` | Change password; old one refused, new one works |
 | `05-server-address.yaml` | Server address validation |
 | `06-phone-sign-in.yaml` | Phone number + SMS code, new account by phone, sign out everywhere |
+| `07-resolution-photo.yaml` | A fixed report shows the city team's photo on its card and on the issue screen, and the image really loads |
 | `_dismiss-system-dialogs.yaml` | Shared: closes Android "app not responding" dialogs |
 
 Environment passed with `-e`: `ASHA_EMAIL`, `ASHA_PASSWORD`, `RAVI_EMAIL`, `RAVI_PASSWORD`, `NEW_EMAIL`, `TEST_PHONE_NUMBER`, `TEST_PHONE_CODE`.

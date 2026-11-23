@@ -1,0 +1,47 @@
+appId: com.civicfix.app
+name: A citizen sees the city team's resolution photo on a fixed report
+---
+- launchApp:
+    clearState: true
+- runFlow: _dismiss-system-dialogs.yaml
+- extendedWaitUntil:
+    visible: "Welcome Back.*"
+    timeout: 150000
+- tapOn:
+    id: "login-email"
+- inputText: ${RAVI_EMAIL}
+- tapOn:
+    id: "login-password"
+# 04-profile-password.yaml changed Ravi's password to this one.
+- inputText: "ravi-new-password-2"
+- hideKeyboard
+- tapOn:
+    id: "login-submit"
+- extendedWaitUntil:
+    visible: "Hello, Ravi"
+    timeout: 60000
+- tapOn: "My Reports"
+- scrollUntilVisible:
+    element: "Blocked drain near the market"
+    direction: DOWN
+# The card shows the fix photo instead of the original report photo.
+- scrollUntilVisible:
+    element: "Photo from the city team after the fix"
+    direction: DOWN
+- takeScreenshot: 07-my-reports-fixed
+- tapOn: "Blocked drain near the market"
+- extendedWaitUntil:
+    visible: "Resolution photo"
+    timeout: 30000
+# The image itself downloaded and decoded, not just an empty box.
+- extendedWaitUntil:
+    visible:
+      id: "resolution-photo-loaded"
+    timeout: 30000
+- assertNotVisible:
+    id: "resolution-photo-failed"
+- takeScreenshot: 07-resolution-photo
+- scrollUntilVisible:
+    element: "Drain cleared and covered"
+    direction: DOWN
+- assertVisible: "Marked as resolved"

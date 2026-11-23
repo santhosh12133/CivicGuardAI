@@ -73,6 +73,30 @@ const main = async () => {
     json: { status: 'In Progress', note: 'Crew scheduled for Monday' },
   });
 
+  // Only for the phone tests (SEED_RESOLVED=1): a drain Ravi reported that the
+  // city team fixed, with a resolution photo. Created before the garbage report
+  // so that one stays the newest.
+  let drain;
+  if (process.env.SEED_RESOLVED === '1') {
+    const drainForm = issueForm({
+      // Not streetlight.jpg: that is the photo the phone test reports with later.
+      photo: await makePhoto({ fixture: 'pothole.jpg', gps: BENGALURU }),
+      lat: BENGALURU.lat - 0.001,
+      lon: BENGALURU.lon,
+      title: 'Blocked drain near the market',
+      description: 'Water overflows onto the road when it rains.',
+    });
+    drainForm.append('category', 'drainage');
+    drain = await call('POST', '/api/issues', { token: ravi.token, form: drainForm });
+
+    const fixed = new FormData();
+    fixed.append('status', 'Resolved');
+    fixed.append('note', 'Drain cleared and covered');
+    const fixPhoto = await makePhoto({ fixture: 'pothole.jpg', gps: BENGALURU });
+    fixed.append('image', new Blob([fixPhoto], { type: 'image/jpeg' }), 'fixed.jpg');
+    await call('PUT', `/api/issues/${drain.id}`, { token: admin.token, form: fixed });
+  }
+
   // 3. Garbage reported by someone else.
   const garbage = await call('POST', '/api/issues', {
     token: ravi.token,
@@ -92,7 +116,7 @@ const main = async () => {
     admin: { email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD },
     asha: { email: asha.email, password: asha.password, name: asha.user.name },
     ravi: { email: ravi.email, password: ravi.password, name: ravi.user.name },
-    issues: { pothole: pothole.id, streetlight: streetlight.id, garbage: garbage.id },
+    issues: { pothole: pothole.id, streetlight: streetlight.id, garbage: garbage.id, ...(drain && { drain: drain.id }) },
   };
   if (process.env.SEED_OUT) fs.writeFileSync(process.env.SEED_OUT, JSON.stringify(seed, null, 2));
 

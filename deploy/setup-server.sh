@@ -266,6 +266,11 @@ log "Starting CivicFix"
   }
 # The portal is built for one public address: always recreate it so a changed address takes effect.
 "${COMPOSE[@]}" up -d --no-deps --force-recreate --wait --wait-timeout 120 civicfix-admin
+# Caddy reads deploy/Caddyfile only when it starts, and a git update replaces the file, so restart it
+# to pick up changes. Its certificates are kept in the caddy_data volume.
+if [ "$MODE" = standalone ]; then
+  "${COMPOSE[@]}" up -d --no-deps --force-recreate caddy
+fi
 "${COMPOSE[@]}" ps
 
 # ----------------------------------------------------------------------------- shared mode: add the site

@@ -23,7 +23,9 @@
 
 	header {
 		X-Content-Type-Options nosniff
-		Referrer-Policy no-referrer
+		# Other sites see only this address, never page paths. OpenStreetMap refuses map tiles
+		# requested with no referrer at all, so "no-referrer" would break the admin map.
+		Referrer-Policy strict-origin-when-cross-origin
 		-Server
 	}
 
