@@ -1,192 +1,135 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, TouchableOpacity, ScrollView } from 'react-native';
-import { Button, TextInput, Text, HelperText } from 'react-native-paper';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { useAuth } from '../context/AuthContext';
+import React, { useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useNavigation, useRoute } from "@react-navigation/native";
+import { useAuth } from "../context/AuthContext";
+import AuthLayout from "../ui/AuthLayout";
+import { Banner, Button, Field, Icon } from "../ui/components";
+import { colors, space, type } from "../ui/theme";
 
 const LoginScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const { login, serverUrl, providers, authNotice, setAuthNotice, signInWithGoogle } = useAuth();
   const notice = route.params?.notice;
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const handleLogin = async () => {
     const trimmedEmail = email.trim();
     const trimmedPassword = password.trim();
-    
-    if (!trimmedEmail || !trimmedPassword) {
-      setError('Email and password are required');
-      return;
-    }
-
-    if (!trimmedEmail.includes('@')) {
-      setError('Please enter a valid email address');
-      return;
-    }
-
+    if (!trimmedEmail || !trimmedPassword) return setError("Enter your email and password.");
+    if (!trimmedEmail.includes("@")) return setError("Enter a valid email address.");
     try {
       setLoading(true);
       setError(null);
+      setAuthNotice(null);
       await login({ email: trimmedEmail, password: trimmedPassword });
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
+    return undefined;
   };
 
+  const host = serverUrl ? serverUrl.replace(/^https?:\/\//, "") : "not set";
+
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
-        <Text variant="headlineLarge" style={styles.title}>
-          Welcome Back 👋
-        </Text>
-        <Text variant="bodyMedium" style={styles.subtitle}>
-          Log in to report and track civic issues in your community.
-        </Text>
-
-        <TextInput
-          label="Email"
-          testID="login-email"
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          mode="outlined"
-          style={styles.input}
-        />
-
-        <TextInput
-          label="Password"
-          testID="login-password"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          mode="outlined"
-          style={styles.input}
-        />
-
-        {notice && !error && <HelperText type="info" style={styles.notice}>{notice}</HelperText>}
-        {authNotice && <HelperText type="error">{authNotice}</HelperText>}
-        {error && <HelperText type="error">{error}</HelperText>}
-
-        <Button mode="contained" onPress={handleLogin} loading={loading} style={styles.button} testID="login-submit">
-          Sign In
-        </Button>
-
-        {providers.passwordReset && (
-          <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} testID="go-to-forgot" style={styles.forgotRow}>
-            <Text style={styles.link}>Forgot password?</Text>
-          </TouchableOpacity>
-        )}
-
-        {(providers.phone || providers.google) && (
-          <View style={styles.altSection}>
-            <Text variant="bodySmall" style={styles.orText}>or</Text>
-            {providers.phone && (
-              <Button mode="outlined" icon="cellphone" onPress={() => navigation.navigate('PhoneLogin')} style={styles.altButton} testID="go-to-phone">
-                Continue with phone number
-              </Button>
-            )}
-            {providers.google && (
-              <Button
-                mode="outlined"
-                icon="google"
-                onPress={() => signInWithGoogle().catch((err) => setAuthNotice(err.message))}
-                style={styles.altButton}
-                testID="google-signin"
-              >
-                Continue with Google
-              </Button>
-            )}
+    <AuthLayout
+      title="Welcome back"
+      subtitle="Sign in to report problems in your area and follow them until they are fixed."
+      footer={
+        <View style={styles.footer}>
+          <View style={styles.signupRow}>
+            <Text style={type.body}>New to CivicFix?</Text>
+            <Pressable onPress={() => navigation.navigate("Signup")} testID="go-to-signup" hitSlop={8}>
+              <Text style={styles.link}>Create an account</Text>
+            </Pressable>
           </View>
-        )}
-
-        <View style={styles.footerRow}>
-          <Text>New here?</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Signup')} testID="go-to-signup">
-            <Text style={styles.link}> Create an account</Text>
-          </TouchableOpacity>
+          <Pressable onPress={() => navigation.navigate("Server")} style={styles.serverRow} testID="change-server" hitSlop={6}>
+            <Icon name="server-network" size={14} color={colors.faint} />
+            <Text style={styles.serverText} numberOfLines={1}>Server: {host}</Text>
+            <Text style={styles.serverLink}>Change</Text>
+          </Pressable>
         </View>
+      }
+    >
+      <Field
+        label="Email"
+        testID="login-email"
+        value={email}
+        onChangeText={(value) => { setEmail(value); setError(null); }}
+        autoCapitalize="none"
+        autoComplete="email"
+        keyboardType="email-address"
+        returnKeyType="next"
+      />
+      <Field
+        label="Password"
+        testID="login-password"
+        value={password}
+        onChangeText={(value) => { setPassword(value); setError(null); }}
+        secure
+        autoComplete="password"
+        returnKeyType="go"
+        onSubmitEditing={handleLogin}
+      />
+      {providers.passwordReset ? (
+        <Pressable onPress={() => navigation.navigate("ForgotPassword")} testID="go-to-forgot" style={styles.forgot} hitSlop={8}>
+          <Text style={styles.link}>Forgot password?</Text>
+        </Pressable>
+      ) : null}
 
-        <TouchableOpacity onPress={() => navigation.navigate('Server')} style={styles.serverRow} testID="change-server">
-          <Text variant="bodySmall" style={styles.serverText}>
-            Server: {serverUrl ? serverUrl.replace(/^https?:\/\//, '') : 'not set'} · <Text style={styles.link}>Change</Text>
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      {notice && !error ? <Banner tone="success">{notice}</Banner> : null}
+      {authNotice ? <Banner tone="error">{authNotice}</Banner> : null}
+      {error ? <Banner tone="error">{error}</Banner> : null}
+
+      <Button title="Sign in" onPress={handleLogin} loading={loading} testID="login-submit" style={styles.submit} />
+
+      {providers.phone || providers.google ? (
+        <>
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={type.caption}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
+          {providers.phone ? (
+            <Button
+              variant="secondary"
+              icon="cellphone"
+              title="Continue with phone number"
+              onPress={() => navigation.navigate("PhoneLogin")}
+              testID="go-to-phone"
+            />
+          ) : null}
+          {providers.google ? (
+            <Button
+              variant="secondary"
+              icon="google"
+              title="Continue with Google"
+              onPress={() => signInWithGoogle().catch((err) => setAuthNotice(err.message))}
+              testID="google-signin"
+            />
+          ) : null}
+        </>
+      ) : null}
+    </AuthLayout>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  inner: {
-    flexGrow: 1,
-    paddingBottom: 32,
-    paddingHorizontal: 24,
-    paddingTop: 96,
-  },
-  title: {
-    fontWeight: '700',
-  },
-  subtitle: {
-    marginTop: 8,
-    marginBottom: 32,
-    color: '#64748b',
-  },
-  input: {
-    marginBottom: 16,
-  },
-  button: {
-    marginTop: 8,
-    paddingVertical: 4,
-  },
-  footerRow: {
-    flexDirection: 'row',
-    marginTop: 24,
-    justifyContent: 'center',
-  },
-  link: {
-    color: '#2563eb',
-    fontWeight: '600',
-  },
-  notice: {
-    color: '#15803d',
-  },
-  forgotRow: {
-    marginTop: 16,
-    alignItems: 'center',
-  },
-  altSection: {
-    marginTop: 20,
-    gap: 10,
-  },
-  orText: {
-    textAlign: 'center',
-    color: '#94a3b8',
-  },
-  altButton: {
-    paddingVertical: 2,
-  },
-  serverRow: {
-    marginTop: 32,
-    alignItems: 'center',
-  },
-  serverText: {
-    color: '#94a3b8',
-  },
+  link: { fontSize: 15, fontWeight: "600", color: colors.brand },
+  forgot: { alignSelf: "flex-end", marginTop: -space.xs },
+  submit: { marginTop: space.xs },
+  divider: { flexDirection: "row", alignItems: "center", gap: space.md, marginVertical: space.xs },
+  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.lineStrong },
+  footer: { gap: space.xl, alignItems: "center" },
+  signupRow: { flexDirection: "row", gap: 6, alignItems: "center" },
+  serverRow: { flexDirection: "row", alignItems: "center", gap: 6, maxWidth: "100%" },
+  serverText: { ...type.micro, flexShrink: 1 },
+  serverLink: { ...type.micro, color: colors.brand, fontWeight: "600" },
 });
 
 export default LoginScreen;
-

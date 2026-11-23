@@ -5,7 +5,7 @@ name: Sign in with a phone number and SMS code, set a password, sign out everywh
     clearState: true
 - runFlow: _dismiss-system-dialogs.yaml
 - extendedWaitUntil:
-    visible: "Welcome Back.*"
+    visible: "Welcome back"
     timeout: 150000
 - scrollUntilVisible:
     element:
@@ -73,6 +73,6 @@ name: Sign in with a phone number and SMS code, set a password, sign out everywh
 - tapOn:
     id: "sign-out-everywhere"
 - extendedWaitUntil:
-    visible: "Welcome Back.*"
+    visible: "Welcome back"
     timeout: 60000
 - takeScreenshot: 06-signed-out-everywhere

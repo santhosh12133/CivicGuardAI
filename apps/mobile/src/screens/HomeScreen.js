@@ -1,353 +1,294 @@
-import React, { useCallback, useState, useMemo } from "react";
-import {
-  View,
-  StyleSheet,
-  FlatList,
-  RefreshControl,
-  ScrollView,
-} from "react-native";
-import {
-  Text,
-  ActivityIndicator,
-  IconButton,
-  Button,
-  Chip,
-} from "react-native-paper";
+import React, { useCallback, useMemo, useState } from "react";
+import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import IssueCard from "../components/IssueCard";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import { useCategories, CATEGORY_ICONS } from "../utils/categories";
+import {
+  Avatar,
+  Banner,
+  Button,
+  EmptyState,
+  Icon,
+  ScreenHeader,
+  Skeleton,
+} from "../ui/components";
+import { colors, radius, space, STATUS, type } from "../ui/theme";
 
-const STATUS_COLORS = {
-  Open: "#f97316",
-  "In Progress": "#eab308",
-  Resolved: "#22c55e",
-};
+const STATUS_FILTERS = ["All", "Open", "In Progress", "Resolved"];
+
+const newestFirst = (a, b) => new Date(b.created_at || b.createdAt) - new Date(a.created_at || a.createdAt);
+
+/** A filter pill; selected pills are filled. */
+const Pill = ({ label, count, icon, selected, onPress, testID, dot }) => (
+  <Pressable
+    onPress={onPress}
+    testID={testID}
+    accessibilityRole="button"
+    accessibilityState={{ selected }}
+    android_ripple={{ color: "rgba(15,23,42,0.06)", borderless: false }}
+    style={[styles.pill, selected && styles.pillSelected]}
+  >
+    {dot ? <View style={[styles.pillDot, { backgroundColor: selected ? "#ffffff" : dot }]} /> : null}
+    {icon ? <Icon name={icon} size={16} color={selected ? "#ffffff" : colors.ink2} /> : null}
+    <Text style={[styles.pillText, selected && styles.pillTextSelected]}>{label}</Text>
+    {count !== undefined ? (
+      <Text style={[styles.pillCount, selected && styles.pillCountSelected]}>{count}</Text>
+    ) : null}
+  </Pressable>
+);
+
+const LoadingList = () => (
+  <View style={styles.skeletons}>
+    {[0, 1].map((key) => (
+      <View key={key} style={styles.skeletonCard}>
+        <Skeleton style={styles.skeletonPhoto} />
+        <View style={styles.skeletonBody}>
+          <Skeleton style={{ width: 90, height: 20, borderRadius: 10 }} />
+          <Skeleton style={{ width: "80%", height: 18 }} />
+          <Skeleton style={{ width: "95%", height: 14 }} />
+          <Skeleton style={{ width: "60%", height: 14 }} />
+        </View>
+      </View>
+    ))}
+  </View>
+);
 
 // Lists all reports, or with `mine` only the signed-in citizen's own
-// ("My Reports" tab).
+// ("My reports" tab).
 const HomeScreen = ({ navigation, mine = false }) => {
   const { user } = useAuth();
   const categories = useCategories();
-  const [categoryFilter, setCategoryFilter] = useState("all");
   const [issues, setIssues] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
-  const [selectedFilter, setSelectedFilter] = useState("All");
-  const [sortBy, setSortBy] = useState("newest"); // 'newest', 'oldest', 'status'
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [oldestFirst, setOldestFirst] = useState(false);
 
-  const fetchIssues = async (isRefreshing = false) => {
+  const fetchIssues = useCallback(async () => {
     try {
-      if (!isRefreshing) {
-        setLoading(true);
-      }
       setError(null);
       const { data } = await api.get("/api/issues", { params: mine ? { mine: "true" } : {} });
-      setIssues(data);
+      setIssues(Array.isArray(data) ? data : []);
     } catch (err) {
       setError(err.message);
     } finally {
-      setLoading(false);
+      setLoaded(true);
       setRefreshing(false);
     }
-  };
+  }, [mine]);
 
+  // Reload whenever the tab is shown, so new reports and status changes appear.
   useFocusEffect(
     useCallback(() => {
       fetchIssues();
-    }, [])
+    }, [fetchIssues])
   );
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchIssues(true);
+    fetchIssues();
   };
 
-  // Filter and sort issues
-  const filteredAndSortedIssues = useMemo(() => {
-    let filtered = issues;
-
-    // Apply filter
-    if (selectedFilter !== "All") {
-      filtered = filtered.filter((issue) => issue.status === selectedFilter);
-    }
-    if (categoryFilter !== "all") {
-      filtered = filtered.filter((issue) => (issue.category || "other") === categoryFilter);
-    }
-
-    // Apply sorting
-    const sorted = [...filtered].sort((a, b) => {
-      switch (sortBy) {
-        case "newest":
-          return (
-            new Date(b.created_at || b.createdAt) -
-            new Date(a.created_at || a.createdAt)
-          );
-        case "oldest":
-          return (
-            new Date(a.created_at || a.createdAt) -
-            new Date(b.created_at || b.createdAt)
-          );
-        case "status":
-          const statusOrder = { Open: 1, "In Progress": 2, Resolved: 3 };
-          return statusOrder[a.status] - statusOrder[b.status];
-        default:
-          return 0;
-      }
+  const counts = useMemo(() => {
+    const byStatus = { All: issues.length };
+    issues.forEach((issue) => {
+      byStatus[issue.status] = (byStatus[issue.status] || 0) + 1;
     });
+    return byStatus;
+  }, [issues]);
 
-    return sorted;
-  }, [issues, selectedFilter, categoryFilter, sortBy]);
-
-  if (loading && !refreshing && !issues.length) {
-    return (
-      <View style={styles.loaderContainer}>
-        <ActivityIndicator animating color="#2563eb" size="large" />
-        <Text style={styles.loaderText}>Loading latest reports...</Text>
-      </View>
+  const visible = useMemo(() => {
+    const filtered = issues.filter(
+      (issue) =>
+        (statusFilter === "All" || issue.status === statusFilter) &&
+        (categoryFilter === "all" || (issue.category || "other") === categoryFilter)
     );
-  }
+    const sorted = [...filtered].sort(newestFirst);
+    return oldestFirst ? sorted.reverse() : sorted;
+  }, [issues, statusFilter, categoryFilter, oldestFirst]);
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <View>
-          <Text variant="headlineSmall" style={styles.greeting}>
-            {mine ? "My reports" : `Hello, ${user?.name?.split(" ")[0] || "there"}`}
+  const filtering = statusFilter !== "All" || categoryFilter !== "all";
+  const firstName = user?.name?.split(" ")[0] || "there";
+
+  const header = (
+    <View>
+      <ScreenHeader
+        title={mine ? "My reports" : `Hello, ${firstName}`}
+        subtitle={
+          mine
+            ? loaded
+              ? `${issues.length} report${issues.length === 1 ? "" : "s"} you have made`
+              : "Reports you have made"
+            : "Problems reported in your community"
+        }
+        right={
+          mine ? null : (
+            <Pressable onPress={() => navigation.navigate("Profile")} accessibilityLabel="Your profile" hitSlop={6}>
+              <Avatar name={user?.name} size={42} />
+            </Pressable>
+          )
+        }
+      />
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow}>
+        {STATUS_FILTERS.map((status) => (
+          <Pill
+            key={status}
+            label={status === "All" ? "All" : STATUS[status].label}
+            count={counts[status] || 0}
+            dot={status === "All" ? null : STATUS[status].color}
+            selected={statusFilter === status}
+            onPress={() => setStatusFilter(status)}
+            testID={`filter-status-${status.toLowerCase().replace(" ", "-")}`}
+          />
+        ))}
+      </ScrollView>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.pillRow, styles.categoryRow]}>
+        {[{ id: "all", label: "All categories" }, ...categories].map((category) => (
+          <Pill
+            key={category.id}
+            label={category.label}
+            icon={category.id === "all" ? "shape-outline" : CATEGORY_ICONS[category.id]}
+            selected={categoryFilter === category.id}
+            onPress={() => setCategoryFilter(category.id)}
+            testID={`filter-category-${category.id}`}
+          />
+        ))}
+      </ScrollView>
+
+      {loaded && !error && visible.length ? (
+        <View style={styles.resultsRow}>
+          <Text style={type.caption}>
+            {visible.length} {visible.length === 1 ? "report" : "reports"}
           </Text>
-          <Text variant="bodyMedium" style={styles.caption}>
-            {mine
-              ? `${issues.length} report${issues.length === 1 ? "" : "s"} you have made. Tap one to follow its progress.`
-              : "Here’s what’s happening around your community today."}
-          </Text>
+          <Pressable
+            onPress={() => setOldestFirst(!oldestFirst)}
+            style={styles.sort}
+            hitSlop={8}
+            accessibilityRole="button"
+            testID="sort-toggle"
+          >
+            <Icon name="swap-vertical" size={16} color={colors.ink2} />
+            <Text style={styles.sortText}>{oldestFirst ? "Oldest first" : "Newest first"}</Text>
+          </Pressable>
         </View>
-        <IconButton
-          icon="refresh"
-          onPress={onRefresh}
-          iconColor="#2563eb"
-          size={24}
-        />
-      </View>
-
-      {/* Filter Buttons */}
-      <View style={styles.filterContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.filterScroll}
-        >
-          {["All", "Open", "In Progress", "Resolved"].map((status) => (
-            <Chip
-              key={status}
-              selected={selectedFilter === status}
-              onPress={() => setSelectedFilter(status)}
-              style={[
-                styles.filterChip,
-                selectedFilter === status && {
-                  backgroundColor:
-                    status === "All" ? "#2563eb" : STATUS_COLORS[status],
-                },
-              ]}
-              textStyle={{
-                color:
-                  selectedFilter === status
-                    ? "white"
-                    : status === "All"
-                    ? "#2563eb"
-                    : STATUS_COLORS[status],
-                fontWeight: selectedFilter === status ? "600" : "400",
-              }}
-            >
-              {status}
-            </Chip>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Category filter */}
-      <View style={styles.filterContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
-          {[{ id: "all", label: "All categories" }, ...categories].map((category) => (
-            <Chip
-              key={category.id}
-              testID={`filter-category-${category.id}`}
-              icon={category.id === "all" ? "shape-outline" : CATEGORY_ICONS[category.id]}
-              selected={categoryFilter === category.id}
-              onPress={() => setCategoryFilter(category.id)}
-              style={[styles.filterChip, categoryFilter === category.id && styles.categoryChipSelected]}
-              compact
-            >
-              {category.label}
-            </Chip>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Sort Options */}
-      <View style={styles.sortContainer}>
-        <Text variant="bodySmall" style={styles.sortLabel}>
-          Sort by:
-        </Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {[
-            { key: "newest", label: "Newest First" },
-            { key: "oldest", label: "Oldest First" },
-            { key: "status", label: "Status" },
-          ].map((option) => (
-            <Button
-              key={option.key}
-              mode={sortBy === option.key ? "contained" : "outlined"}
-              onPress={() => setSortBy(option.key)}
-              style={styles.sortButton}
-              compact
-            >
-              {option.label}
-            </Button>
-          ))}
-        </ScrollView>
-      </View>
+      ) : null}
 
       {error ? (
         <View style={styles.errorBox}>
-          <Text style={styles.errorText}>{error}</Text>
-          <Text style={styles.retryLink} onPress={fetchIssues}>
-            Tap to retry
-          </Text>
+          <Banner tone="error">{`Could not load reports. ${error}`}</Banner>
+          <Button variant="secondary" title="Try again" icon="refresh" onPress={onRefresh} compact />
         </View>
-      ) : (
-        <FlatList
-          data={filteredAndSortedIssues}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <IssueCard
-              issue={item}
-              onPress={() =>
-                navigation.navigate("IssueDetail", { issueId: item.id })
-              }
-            />
-          )}
-          contentContainerStyle={styles.list}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Text variant="titleMedium">
-                {selectedFilter !== "All" || categoryFilter !== "all"
-                  ? "No reports match these filters."
-                  : mine
-                  ? "You haven't reported anything yet."
-                  : "No issues reported yet."}
-              </Text>
-              <Text variant="bodyMedium" style={styles.caption}>
-                {selectedFilter !== "All" || categoryFilter !== "all"
-                  ? "Try selecting a different filter."
-                  : "Be the first to highlight an issue in your area."}
-              </Text>
-              {mine && selectedFilter === "All" && categoryFilter === "all" && (
-                <Button mode="contained" style={styles.emptyButton} onPress={() => navigation.navigate("Report")}>
-                  Report an issue
-                </Button>
-              )}
-            </View>
-          }
-        />
-      )}
+      ) : null}
     </View>
+  );
+
+  const empty = !loaded ? (
+    <LoadingList />
+  ) : error ? null : filtering ? (
+    <EmptyState
+      icon="filter-variant-remove"
+      title="No reports match these filters"
+      body="Try another status or category."
+      action={
+        <Button
+          variant="secondary"
+          title="Clear filters"
+          onPress={() => {
+            setStatusFilter("All");
+            setCategoryFilter("all");
+          }}
+        />
+      }
+    />
+  ) : mine ? (
+    <EmptyState
+      icon="file-document-outline"
+      title="You haven't reported anything yet."
+      body="When you report a problem, you can follow it here until it is fixed."
+      action={<Button title="Report a problem" icon="camera-outline" onPress={() => navigation.navigate("Report")} />}
+    />
+  ) : (
+    <EmptyState
+      icon="map-marker-check-outline"
+      title="No reports yet"
+      body="Problems reported in your area will appear here."
+    />
+  );
+
+  return (
+    <FlatList
+      style={styles.screen}
+      data={loaded && !error ? visible : []}
+      keyExtractor={(item) => item.id}
+      renderItem={({ item }) => (
+        <View style={styles.cardWrap}>
+          <IssueCard issue={item} onPress={() => navigation.navigate("IssueDetail", { issueId: item.id })} />
+        </View>
+      )}
+      ListHeaderComponent={header}
+      ListEmptyComponent={empty}
+      contentContainerStyle={styles.list}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.brand]} />}
+      showsVerticalScrollIndicator={false}
+    />
   );
 };
 
 const styles = StyleSheet.create({
-  categoryChipSelected: {
-    backgroundColor: "#dbeafe",
-  },
-  emptyButton: {
-    marginTop: 16,
-  },
-  container: {
-    flex: 1,
-    backgroundColor: "#f8fafc",
-    paddingHorizontal: 16,
-    paddingTop: 48,
-  },
-  header: {
+  screen: { flex: 1, backgroundColor: colors.background },
+  list: { paddingBottom: space.xxl },
+  cardWrap: { paddingHorizontal: space.lg },
+
+  pillRow: { paddingHorizontal: space.lg, gap: space.sm, paddingTop: space.xs },
+  categoryRow: { paddingTop: space.sm + 2 },
+  pill: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
-  },
-  greeting: {
-    fontWeight: "700",
-  },
-  caption: {
-    color: "#64748b",
-  },
-  list: {
-    paddingBottom: 24,
-  },
-  loaderContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#f8fafc",
-  },
-  loaderText: {
-    marginTop: 12,
-    color: "#64748b",
-  },
-  errorBox: {
-    backgroundColor: "#fee2e2",
-    padding: 16,
-    borderRadius: 12,
-  },
-  errorText: {
-    color: "#b91c1c",
-    fontWeight: "600",
-  },
-  retryLink: {
-    marginTop: 8,
-    color: "#2563eb",
-    fontWeight: "600",
-  },
-  emptyState: {
-    alignItems: "center",
-    marginTop: 72,
-    gap: 8,
-  },
-  filterContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "white",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
-  },
-  filterScroll: {
-    flexDirection: "row",
-  },
-  filterChip: {
-    marginRight: 8,
+    gap: 6,
+    height: 36,
+    paddingHorizontal: 14,
+    borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: "#d1d5db",
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
+    overflow: "hidden",
   },
-  sortContainer: {
+  pillSelected: { backgroundColor: colors.ink, borderColor: colors.ink },
+  pillDot: { width: 8, height: 8, borderRadius: 4 },
+  pillText: { fontSize: 14, fontWeight: "500", color: colors.ink2 },
+  pillTextSelected: { color: "#ffffff" },
+  pillCount: { fontSize: 13, fontWeight: "600", color: colors.faint },
+  pillCountSelected: { color: "rgba(255,255,255,0.7)" },
+
+  resultsRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "white",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
+    justifyContent: "space-between",
+    paddingHorizontal: space.xl,
+    paddingTop: space.lg + 2,
+    paddingBottom: space.md,
   },
-  sortLabel: {
-    marginRight: 12,
-    color: "#6b7280",
-    fontWeight: "500",
+  sort: { flexDirection: "row", alignItems: "center", gap: 4 },
+  sortText: { fontSize: 13, fontWeight: "600", color: colors.ink2 },
+
+  errorBox: { paddingHorizontal: space.lg, paddingTop: space.lg, gap: space.md },
+
+  skeletons: { paddingHorizontal: space.lg, paddingTop: space.lg, gap: space.md + 2 },
+  skeletonCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.line,
+    overflow: "hidden",
   },
-  sortButton: {
-    marginRight: 8,
-  },
+  skeletonPhoto: { width: "100%", aspectRatio: 16 / 9, borderRadius: 0 },
+  skeletonBody: { padding: space.lg, gap: space.md },
 });
 
 export default HomeScreen;

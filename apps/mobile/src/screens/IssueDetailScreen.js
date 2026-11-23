@@ -1,61 +1,94 @@
-import React, { useState, useCallback, useRef } from "react";
-import {
-  View,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,
-  RefreshControl,
-} from "react-native";
-import { Text, Button, Chip, Card } from "react-native-paper";
-import { useRoute, useFocusEffect } from "@react-navigation/native";
+import React, { useCallback, useRef, useState } from "react";
+import { Linking, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useFocusEffect, useRoute } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import api from "../utils/api";
 import RemotePhoto from "../components/RemotePhoto";
+import { placeLine } from "../components/IssueCard";
 import { useCategories, categoryLabel, CATEGORY_ICONS } from "../utils/categories";
-
-const STATUS_COLORS = {
-  Open: "#f97316",
-  "In Progress": "#eab308",
-  Resolved: "#22c55e",
-};
+import {
+  Banner,
+  Button,
+  Card,
+  EmptyState,
+  Icon,
+  IconButton,
+  ProgressTrack,
+  SectionTitle,
+  Skeleton,
+  StatusBadge,
+  Tag,
+} from "../ui/components";
+import { colors, radius, space, statusInfo, STATUS, type } from "../ui/theme";
+import { dateTime, shortDate } from "../ui/time";
 
 const describeUpdate = (update) => {
   if (!update.from_status && update.to_status === "Open") return "Reported";
   if (update.to_status === "Resolved") return "Marked as resolved";
-  if (update.to_status) return `Status changed to ${update.to_status}`;
+  if (update.to_status) return `Status changed to ${statusInfo(update.to_status).label}`;
   if (update.photo_url && !update.note) return "Photo added";
-  return "Update from the team";
+  return "Update from the city team";
 };
 
 const describeAuthor = (author) => {
   if (!author) return "CivicFix";
   if (author.is_me) return "You";
-  if (author.role === "citizen") return "Citizen";
-  return author.name ? `${author.name} (city team)` : "City team";
+  if (author.role === "citizen") return "A resident";
+  return author.name ? `${author.name}, city team` : "City team";
 };
+
+const openInMaps = ({ latitude, longitude }) =>
+  Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`);
+
+// When each step of the progress track was reached, from the timeline.
+const stepDates = (issue) => {
+  const reachedAt = (status) => issue.updates?.find((update) => update.to_status === status)?.created_at;
+  return [
+    shortDate(issue.created_at || issue.createdAt),
+    shortDate(reachedAt("In Progress")),
+    shortDate(reachedAt("Resolved") || (issue.status === "Resolved" ? issue.updated_at : null)),
+  ];
+};
+
+const TopBar = ({ onBack, title }) => {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[styles.topBar, { paddingTop: insets.top + space.xs }]}>
+      <IconButton icon="arrow-left" onPress={onBack} accessibilityLabel="Back" testID="detail-back" />
+      <Text style={[type.heading, styles.topTitle]} numberOfLines={1}>{title}</Text>
+      <View style={styles.topSpacer} />
+    </View>
+  );
+};
+
+const LoadingDetail = () => (
+  <View style={styles.content}>
+    <Skeleton style={styles.photoSkeleton} />
+    <Skeleton style={{ width: 110, height: 24, borderRadius: 12, marginTop: space.lg }} />
+    <Skeleton style={{ width: "85%", height: 26, marginTop: space.md }} />
+    <Skeleton style={{ width: "100%", height: 96, marginTop: space.lg, borderRadius: radius.lg }} />
+  </View>
+);
 
 const IssueDetailScreen = ({ navigation }) => {
   const categories = useCategories();
   const route = useRoute();
   const { issueId } = route.params || {};
   const [issue, setIssue] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
   const [refreshing, setRefreshing] = useState(false);
   const loaded = useRef(false);
 
   // Loads the issue; later loads keep the current screen until the new data arrives.
   const fetchIssueDetails = useCallback(async () => {
     try {
-      if (!loaded.current) setLoading(true);
       const { data } = await api.get(`/api/issues/${issueId}`);
       setIssue(data.issue || data);
       setError(null);
       loaded.current = true;
     } catch (err) {
-      if (!loaded.current) setError(err.message || "Failed to load issue details");
+      if (!loaded.current) setError(err.message || "Could not load this report.");
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
   }, [issueId]);
@@ -73,408 +106,199 @@ const IssueDetailScreen = ({ navigation }) => {
     fetchIssueDetails();
   };
 
-  if (loading) {
+  const goBack = () => navigation.goBack();
+
+  if (error && !issue) {
     return (
-      <View style={styles.loaderContainer}>
-        <ActivityIndicator animating color="#2563eb" size="large" />
-        <Text style={styles.loaderText}>Loading issue details...</Text>
+      <View style={styles.screen}>
+        <TopBar onBack={goBack} title="Report" />
+        <EmptyState
+          icon="alert-circle-outline"
+          title="Could not load this report"
+          body={error}
+          action={<Button variant="secondary" title="Try again" icon="refresh" onPress={() => { setError(null); fetchIssueDetails(); }} />}
+        />
       </View>
     );
   }
 
-  if (error || !issue) {
+  if (!issue) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>{error || "Issue not found"}</Text>
-        <Button mode="contained" onPress={() => navigation.goBack()}>
-          Go Back
-        </Button>
+      <View style={styles.screen}>
+        <TopBar onBack={goBack} title="Report" />
+        <LoadingDetail />
       </View>
     );
   }
 
-  const statusColor = STATUS_COLORS[issue.status] || "#64748b";
+  const icon = CATEGORY_ICONS[issue.category] || CATEGORY_ICONS.other;
+  const resolvedPhoto = issue.status === "Resolved" && issue.resolved_photo_url;
+  const updates = Array.isArray(issue.updates) ? issue.updates : [];
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <Button
-          mode="text"
-          onPress={() => navigation.goBack()}
-          icon="arrow-left"
-          style={styles.backButton}
-        >
-          Back
-        </Button>
-        <Text variant="headlineMedium" style={styles.title}>
-          {issue.title}
-        </Text>
-      </View>
+    <View style={styles.screen}>
+      <TopBar onBack={goBack} title="Report" />
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.brand]} />}
+        showsVerticalScrollIndicator={false}
+      >
+        {issue.photo_url ? (
+          <RemotePhoto
+            url={issue.photo_url}
+            style={styles.photo}
+            testID="issue-photo"
+            accessibilityLabel="Photo of the reported problem"
+          />
+        ) : null}
 
-      {/* Status and category */}
-      <View style={[styles.statusContainer, styles.chipRow]}>
-        <Chip
-          style={{ backgroundColor: `${statusColor}22` }}
-          textStyle={{ color: statusColor, fontWeight: "600" }}
-        >
-          {issue.status}
-        </Chip>
-        <Chip icon={CATEGORY_ICONS[issue.category] || CATEGORY_ICONS.other} style={styles.categoryChip}>
-          {categoryLabel(categories, issue.category)}
-        </Chip>
-        {issue.is_mine && (
-          <Chip style={styles.mineChip} textStyle={styles.mineText}>
-            Your report
-          </Chip>
-        )}
-      </View>
+        <View style={styles.tags}>
+          <StatusBadge status={issue.status} />
+          <Tag icon={icon}>{categoryLabel(categories, issue.category)}</Tag>
+          {issue.is_mine ? <Tag tone="brand" icon="account-outline">Your report</Tag> : null}
+        </View>
+        <Text style={[type.title, styles.title]} testID="issue-detail">{issue.title}</Text>
 
-      {/* Issue Photo */}
-      {issue && issue.photo_url ? (
-        <Card style={styles.photoCard}>
-          <Card.Content style={styles.photoContent}>
-            <Text variant="titleSmall" style={styles.photoLabel}>
-              Issue Photo
-            </Text>
-            <RemotePhoto
-              url={issue.photo_url}
-              style={styles.issueImage}
-              resizeMode="contain"
-              testID="issue-photo"
-              accessibilityLabel="Photo of the reported problem"
-            />
-          </Card.Content>
+        <Card style={styles.section}>
+          <SectionTitle>Progress</SectionTitle>
+          <ProgressTrack status={issue.status} dates={stepDates(issue)} />
         </Card>
-      ) : (
-        <Card style={styles.photoCard}>
-          <Card.Content style={styles.photoContent}>
-            <Text variant="titleSmall" style={styles.photoLabel}>
-              Issue Photo
-            </Text>
-            <View
-              style={[
-                styles.issueImage,
-                {
-                  backgroundColor: "#e0e0e0",
-                  justifyContent: "center",
-                  alignItems: "center",
-                },
-              ]}
-            >
-              <Text style={{ color: "#999" }}>No photo available</Text>
+
+        {resolvedPhoto ? (
+          <Card style={[styles.section, styles.resolvedCard]}>
+            <View style={styles.resolvedHead}>
+              <Icon name="check-decagram" size={20} color={STATUS.Resolved.color} />
+              <Text style={[type.heading, { color: STATUS.Resolved.text }]}>Resolution photo</Text>
             </View>
-          </Card.Content>
-        </Card>
-      )}
-
-      {/* The city team's photo of the finished work */}
-      {issue.status === "Resolved" && issue.resolved_photo_url ? (
-        <Card style={styles.resolvedCard}>
-          <Card.Content>
-            <Text variant="titleSmall" style={styles.resolvedTitle}>
-              Resolution photo
-            </Text>
-            <Text variant="bodySmall" style={styles.resolvedSubtext}>
-              Taken by the city team when the work was done.
-            </Text>
+            <Text style={[type.caption, styles.resolvedCaption]}>Taken by the city team when the work was done.</Text>
             <RemotePhoto
               url={issue.resolved_photo_url}
-              style={styles.resolvedImage}
-              resizeMode="contain"
+              style={styles.resolvedPhoto}
+              resizeMode="cover"
               testID="resolution-photo"
               accessibilityLabel="Resolution photo from the city team"
             />
-          </Card.Content>
+          </Card>
+        ) : null}
+
+        {issue.needs_review && issue.status !== "Resolved" ? (
+          <Banner tone="info" style={styles.section}>
+            The city team is checking the photo and location before acting on this report.
+          </Banner>
+        ) : null}
+
+        {issue.description ? (
+          <Card style={styles.section}>
+            <SectionTitle>Description</SectionTitle>
+            <Text style={type.body}>{issue.description}</Text>
+          </Card>
+        ) : null}
+
+        <Card style={styles.section}>
+          <SectionTitle>Location</SectionTitle>
+          <View style={styles.placeRow}>
+            <View style={styles.placeIcon}>
+              <Icon name="map-marker" size={20} color={colors.brand} />
+            </View>
+            <View style={styles.placeText}>
+              <Text style={type.bodyStrong}>{placeLine(issue)}</Text>
+              {issue.address ? (
+                <Text style={type.caption}>
+                  {Number(issue.latitude).toFixed(5)}, {Number(issue.longitude).toFixed(5)}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+          <Button
+            variant="secondary"
+            compact
+            icon="map-outline"
+            title="Open in Maps"
+            onPress={() => openInMaps(issue)}
+            style={styles.mapButton}
+          />
         </Card>
-      ) : null}
 
-      {/* Description */}
-      <Card style={styles.card}>
-        <Card.Content>
-          <Text variant="titleSmall" style={styles.sectionTitle}>
-            Description
-          </Text>
-          <Text variant="bodyMedium" style={styles.descriptionText}>
-            {issue.description}
-          </Text>
-        </Card.Content>
-      </Card>
-
-      {/* Location Info */}
-      <Card style={styles.card}>
-        <Card.Content>
-          <Text variant="titleSmall" style={styles.sectionTitle}>
-            Location
-          </Text>
-          {issue.address && (
-            <Text variant="bodyMedium" style={styles.addressText}>
-              📍 {issue.address}
-            </Text>
-          )}
-          <Text variant="bodySmall" style={styles.coordinatesText}>
-            {Number(issue.latitude).toFixed(4)},{" "}
-            {Number(issue.longitude).toFixed(4)}
-          </Text>
-        </Card.Content>
-      </Card>
-
-      {/* Date Info */}
-      <Card style={styles.card}>
-        <Card.Content>
-          <Text variant="titleSmall" style={styles.sectionTitle}>
-            Reported
-          </Text>
-          <Text variant="bodyMedium" style={styles.dateText}>
-            {new Date(issue.created_at || issue.createdAt).toLocaleString()}
-          </Text>
-        </Card.Content>
-      </Card>
-
-      {/* Timeline of updates from the city team */}
-      {Array.isArray(issue.updates) && issue.updates.length > 0 && (
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text variant="titleSmall" style={styles.sectionTitle}>
-              Updates
-            </Text>
-            {issue.updates.map((update, index) => (
-              <View
-                key={update.id}
-                style={[styles.timelineItem, index === issue.updates.length - 1 && styles.timelineItemLast]}
-              >
-                <View
-                  style={[
-                    styles.timelineDot,
-                    { backgroundColor: STATUS_COLORS[update.to_status] || "#94a3b8" },
-                  ]}
-                />
-                <View style={styles.timelineBody}>
-                  <Text variant="bodyMedium" style={styles.timelineTitle}>
-                    {describeUpdate(update)}
-                  </Text>
-                  {update.note ? (
-                    <Text variant="bodyMedium" style={styles.timelineNote}>
-                      {update.note}
-                    </Text>
-                  ) : null}
-                  {update.photo_url ? (
-                    <RemotePhoto
-                      url={update.photo_url}
-                      style={styles.timelinePhoto}
-                      accessibilityLabel="Photo added to this update"
+        {updates.length ? (
+          <Card style={styles.section}>
+            <SectionTitle>Updates</SectionTitle>
+            {updates.map((update, index) => {
+              const last = index === updates.length - 1;
+              return (
+                <View key={update.id} style={styles.timelineItem}>
+                  <View style={styles.timelineRail}>
+                    <View
+                      style={[
+                        styles.timelineDot,
+                        { backgroundColor: update.to_status ? statusInfo(update.to_status).color : colors.faint },
+                      ]}
                     />
-                  ) : null}
-                  <Text variant="bodySmall" style={styles.timelineMeta}>
-                    {new Date(update.created_at).toLocaleString()} · {describeAuthor(update.author)}
-                  </Text>
+                    {!last ? <View style={styles.timelineLine} /> : null}
+                  </View>
+                  <View style={[styles.timelineBody, !last && styles.timelineBodySpaced]}>
+                    <Text style={type.bodyStrong}>{describeUpdate(update)}</Text>
+                    {update.note ? <Text style={type.body}>{update.note}</Text> : null}
+                    {update.photo_url ? (
+                      <RemotePhoto url={update.photo_url} style={styles.timelinePhoto} accessibilityLabel="Photo added to this update" />
+                    ) : null}
+                    <Text style={type.caption}>
+                      {dateTime(update.created_at)}, {describeAuthor(update.author)}
+                    </Text>
+                  </View>
                 </View>
-              </View>
-            ))}
-          </Card.Content>
-        </Card>
-      )}
-
-      {/* Additional Info */}
-      {issue.needs_review && (
-        <Card style={styles.warningCard}>
-          <Card.Content>
-            <Text variant="titleSmall" style={styles.warningTitle}>
-              ⚠️ Under Review
-            </Text>
-            <Text variant="bodySmall" style={styles.warningText}>
-              This issue is pending manual review by our team.
-            </Text>
-          </Card.Content>
-        </Card>
-      )}
-    </ScrollView>
+              );
+            })}
+          </Card>
+        ) : null}
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  chipRow: {
+  screen: { flex: 1, backgroundColor: colors.background },
+  topBar: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  categoryChip: {
-    backgroundColor: "#f1f5f9",
-  },
-  mineChip: {
-    backgroundColor: "#dbeafe",
-  },
-  mineText: {
-    color: "#1d4ed8",
-  },
-  timelineItem: {
-    flexDirection: "row",
-    paddingBottom: 16,
-    borderLeftWidth: 2,
-    borderLeftColor: "#e2e8f0",
-    marginLeft: 6,
-    paddingLeft: 16,
-  },
-  timelineItemLast: {
-    borderLeftColor: "transparent",
-    paddingBottom: 0,
-  },
-  timelineDot: {
-    position: "absolute",
-    left: -7,
-    top: 4,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  timelineBody: {
-    flex: 1,
-    gap: 4,
-  },
-  timelineTitle: {
-    fontWeight: "600",
-  },
-  timelineNote: {
-    color: "#334155",
-  },
-  timelinePhoto: {
-    width: "100%",
-    height: 160,
-    borderRadius: 8,
-    marginTop: 4,
-  },
-  timelineMeta: {
-    color: "#94a3b8",
-  },
-  container: {
-    flex: 1,
-    backgroundColor: "#f8fafc",
-  },
-  content: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 64,
-  },
-  header: {
-    marginBottom: 16,
-  },
-  backButton: {
-    alignSelf: "flex-start",
-    marginBottom: 8,
-  },
-  title: {
-    fontWeight: "700",
-    color: "#1e293b",
-  },
-  statusContainer: {
-    marginBottom: 16,
-  },
-  card: {
-    marginBottom: 12,
-    borderRadius: 12,
-  },
-  photoCard: {
-    marginBottom: 16,
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  photoContent: {
-    padding: 0,
-  },
-  photoLabel: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    marginBottom: 8,
-    fontWeight: "600",
-    color: "#475569",
-  },
-  issueImage: {
-    width: "100%",
-    height: 300,
-    borderRadius: 8,
-  },
-  sectionTitle: {
-    fontWeight: "600",
-    color: "#475569",
-    marginBottom: 8,
-  },
-  descriptionText: {
-    color: "#1e293b",
-    lineHeight: 24,
-  },
-  addressText: {
-    color: "#2563eb",
-    fontWeight: "500",
-    marginBottom: 4,
-  },
-  coordinatesText: {
-    color: "#64748b",
-    fontStyle: "italic",
-  },
-  dateText: {
-    color: "#1e293b",
-  },
-  resolvedCard: {
-    marginTop: 0,
-    marginBottom: 12,
-    backgroundColor: "#dcfce7",
-    borderRadius: 12,
-  },
-  resolvedTitle: {
-    fontWeight: "600",
-    color: "#15803d",
-    marginBottom: 4,
-  },
-  resolvedSubtext: {
-    color: "#166534",
-    marginBottom: 12,
-  },
-  resolvedImage: {
-    width: "100%",
-    height: 250,
-    borderRadius: 8,
-    backgroundColor: "#e2e8f0",
-  },
-  warningCard: {
-    marginBottom: 12,
-    backgroundColor: "#fef3c7",
-    borderRadius: 12,
-  },
-  warningTitle: {
-    fontWeight: "600",
-    color: "#b45309",
-    marginBottom: 4,
-  },
-  warningText: {
-    color: "#92400e",
-  },
-  loaderContainer: {
-    flex: 1,
-    justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f8fafc",
+    paddingHorizontal: space.sm,
+    paddingBottom: space.xs,
+    backgroundColor: colors.background,
   },
-  loaderText: {
-    marginTop: 12,
-    color: "#64748b",
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: "center",
+  topTitle: { flex: 1, textAlign: "center" },
+  topSpacer: { width: 40 },
+
+  content: { padding: space.lg, paddingTop: space.sm, paddingBottom: space.xxxl },
+  photo: { width: "100%", aspectRatio: 4 / 3, borderRadius: radius.lg },
+  photoSkeleton: { width: "100%", aspectRatio: 4 / 3, borderRadius: radius.lg },
+
+  tags: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginTop: space.lg },
+  title: { marginTop: space.md },
+  section: { marginTop: space.lg },
+
+  resolvedCard: { borderColor: "#bbf7d0", backgroundColor: "#f7fdf9" },
+  resolvedHead: { flexDirection: "row", alignItems: "center", gap: space.sm },
+  resolvedCaption: { marginTop: 2, marginBottom: space.md },
+  resolvedPhoto: { width: "100%", aspectRatio: 4 / 3, borderRadius: radius.md },
+
+  placeRow: { flexDirection: "row", gap: space.md, alignItems: "center" },
+  placeIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: colors.brandSoft,
     alignItems: "center",
-    backgroundColor: "#f8fafc",
-    paddingHorizontal: 16,
+    justifyContent: "center",
   },
-  errorText: {
-    color: "#dc2626",
-    fontWeight: "600",
-    marginBottom: 16,
-    textAlign: "center",
-  },
+  placeText: { flex: 1, gap: 2 },
+  mapButton: { marginTop: space.md },
+
+  timelineItem: { flexDirection: "row", gap: space.md },
+  timelineRail: { width: 12, alignItems: "center" },
+  timelineDot: { width: 10, height: 10, borderRadius: 5, marginTop: 6 },
+  timelineLine: { flex: 1, width: 2, backgroundColor: colors.line, marginTop: 4 },
+  timelineBody: { flex: 1, gap: 4 },
+  timelineBodySpaced: { paddingBottom: space.lg },
+  timelinePhoto: { width: "100%", aspectRatio: 16 / 9, borderRadius: radius.md, marginTop: 4 },
 });
 
 export default IssueDetailScreen;

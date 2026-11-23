@@ -1,28 +1,27 @@
-import React, { useState } from 'react';
-import { StyleSheet, ScrollView, View } from 'react-native';
-import { Avatar, Button, Text, Divider, Snackbar, TextInput, HelperText } from 'react-native-paper';
-import { useAuth } from '../context/AuthContext';
-import api from '../utils/api';
+import React, { useState } from "react";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Snackbar } from "react-native-paper";
+import { useAuth } from "../context/AuthContext";
+import api from "../utils/api";
+import { Avatar, Banner, Button, Field, ListRow, ScreenHeader, SectionTitle } from "../ui/components";
+import { colors, radius, space, type } from "../ui/theme";
 
-const ChangePassword = ({ onDone, hasPassword }) => {
-  const [current, setCurrent] = useState('');
-  const [next, setNext] = useState('');
-  const [confirm, setConfirm] = useState('');
+const ChangePassword = ({ onDone, onCancel, hasPassword }) => {
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
-    if (hasPassword && !current) return setError('Enter your current password.');
-    if (next.length < 8) return setError('The new password must be at least 8 characters.');
-    if (next !== confirm) return setError('The new passwords do not match.');
+    if (hasPassword && !current) return setError("Enter your current password.");
+    if (next.length < 8) return setError("Use at least 8 characters for the new password.");
+    if (next !== confirm) return setError("The two new passwords do not match.");
     try {
       setSaving(true);
       setError(null);
-      await api.post('/api/auth/change-password', hasPassword ? { currentPassword: current, newPassword: next } : { newPassword: next });
-      setCurrent('');
-      setNext('');
-      setConfirm('');
-      onDone(hasPassword ? 'Password changed. Your other devices were signed out.' : 'Password set. You can now also sign in with your email and password.');
+      await api.post("/api/auth/change-password", hasPassword ? { currentPassword: current, newPassword: next } : { newPassword: next });
+      onDone(hasPassword ? "Password changed. Your other devices were signed out." : "Password set. You can now also sign in with your email and password.");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -32,16 +31,17 @@ const ChangePassword = ({ onDone, hasPassword }) => {
   };
 
   return (
-    <View>
-      {hasPassword && (
-        <TextInput testID="password-current" label="Current password" value={current} onChangeText={setCurrent} secureTextEntry mode="outlined" style={styles.input} />
-      )}
-      <TextInput testID="password-new" label="New password" value={next} onChangeText={setNext} secureTextEntry mode="outlined" style={styles.input} />
-      <TextInput testID="password-confirm" label="Confirm new password" value={confirm} onChangeText={setConfirm} secureTextEntry mode="outlined" style={styles.input} />
-      {error && <HelperText type="error">{error}</HelperText>}
-      <Button testID="password-save" mode="outlined" onPress={save} loading={saving} disabled={saving || !next}>
-        Save new password
-      </Button>
+    <View style={styles.passwordForm}>
+      {hasPassword ? (
+        <Field testID="password-current" label="Current password" value={current} onChangeText={setCurrent} secure autoComplete="password" />
+      ) : null}
+      <Field testID="password-new" label="New password" value={next} onChangeText={setNext} secure autoComplete="new-password" />
+      <Field testID="password-confirm" label="Confirm new password" value={confirm} onChangeText={setConfirm} secure autoComplete="new-password" />
+      {error ? <Banner tone="error">{error}</Banner> : null}
+      <View style={styles.formButtons}>
+        <Button variant="secondary" title="Cancel" onPress={onCancel} style={styles.formButton} disabled={saving} />
+        <Button testID="password-save" title="Save password" onPress={save} loading={saving} disabled={!next} style={styles.formButton} />
+      </View>
     </View>
   );
 };
@@ -49,105 +49,133 @@ const ChangePassword = ({ onDone, hasPassword }) => {
 const ProfileScreen = () => {
   const { user, logout, logoutEverywhere, refreshUser, serverUrl } = useAuth();
   const hasPassword = user?.has_password !== false;
-  const [signingOutAll, setSigningOutAll] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
+  const [signingOut, setSigningOut] = useState(false);
+  const [message, setMessage] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
 
-  const handleLogout = async () => {
+  const run = async (action) => {
     try {
-      setLoading(true);
-      await logout();
+      setSigningOut(true);
+      await action();
     } catch (error) {
       setMessage(error.message);
-    } finally {
-      setLoading(false);
+      setSigningOut(false);
     }
   };
 
+  const contact = [user?.email, user?.phone].filter(Boolean);
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <View style={styles.header}>
-        <Avatar.Text size={80} label={user?.name?.[0]?.toUpperCase() || '?'} style={styles.avatar} />
-        <Text variant="headlineSmall" style={styles.name}>
-          {user?.name}
-        </Text>
-        <Text variant="bodyMedium" style={styles.email}>
-          {user?.email || user?.phone}
-        </Text>
-        <Text variant="bodySmall" style={styles.role}>
-          Role · {user?.role || 'citizen'}
-        </Text>
-      </View>
+    <View style={styles.screen}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <ScreenHeader title="Profile" />
 
-      <Divider style={styles.divider} />
+        <View style={styles.body}>
+          <View style={styles.identity}>
+            <Avatar name={user?.name} size={64} />
+            <View style={styles.identityText}>
+              <Text style={type.title} numberOfLines={1}>{user?.name}</Text>
+              {contact.map((line) => (
+                <Text key={line} style={type.body} numberOfLines={1}>{line}</Text>
+              ))}
+            </View>
+          </View>
 
-      <View style={styles.section}>
-        <Text variant="titleMedium" style={styles.sectionTitle}>
-          Password
-        </Text>
-        {changingPassword ? (
-          <ChangePassword
-            hasPassword={hasPassword}
-            onDone={(text) => {
-              setChangingPassword(false);
-              setMessage(text);
-              refreshUser().catch(() => {});
-            }}
+          <View>
+            <SectionTitle>Security</SectionTitle>
+            <View style={styles.group}>
+              {changingPassword ? (
+                <View style={styles.groupPadding}>
+                  <Text style={[type.heading, styles.formTitle]}>{hasPassword ? "Change password" : "Set a password"}</Text>
+                  <ChangePassword
+                    hasPassword={hasPassword}
+                    onCancel={() => setChangingPassword(false)}
+                    onDone={(text) => {
+                      setChangingPassword(false);
+                      setMessage(text);
+                      refreshUser().catch(() => {});
+                    }}
+                  />
+                </View>
+              ) : (
+                <ListRow
+                  icon="lock-outline"
+                  title={hasPassword ? "Change password" : "Set a password"}
+                  subtitle={hasPassword ? "Signs you out on your other devices" : "So you can also sign in with email"}
+                  onPress={() => setChangingPassword(true)}
+                  testID="change-password"
+                />
+              )}
+              <ListRow
+                icon="cellphone-link-off"
+                title="Sign out on all devices"
+                subtitle="Use this if you lost a phone"
+                onPress={() => run(logoutEverywhere)}
+                testID="sign-out-everywhere"
+                last
+              />
+            </View>
+          </View>
+
+          <View>
+            <SectionTitle>App</SectionTitle>
+            <View style={styles.group}>
+              <ListRow
+                icon="server-network"
+                title="Server"
+                subtitle={serverUrl ? serverUrl.replace(/^https?:\/\//, "") : "Not set"}
+                right={null}
+                last
+              />
+            </View>
+          </View>
+
+          <Button
+            variant="secondary"
+            icon="logout"
+            title="Sign out"
+            onPress={() => run(logout)}
+            loading={signingOut}
+            testID="sign-out"
           />
-        ) : (
-          <Button testID="change-password" mode="outlined" onPress={() => setChangingPassword(true)}>
-            {hasPassword ? 'Change password' : 'Set a password'}
-          </Button>
-        )}
-      </View>
-
-      <View style={styles.section}>
-        <Button testID="sign-out" mode="contained" onPress={handleLogout} loading={loading} style={styles.button}>
-          Sign Out
-        </Button>
-        <Button
-          testID="sign-out-everywhere"
-          mode="text"
-          loading={signingOutAll}
-          onPress={async () => {
-            try {
-              setSigningOutAll(true);
-              await logoutEverywhere();
-            } catch (error) {
-              setMessage(error.message);
-              setSigningOutAll(false);
-            }
-          }}
-        >
-          Sign out on all devices
-        </Button>
-        <Text variant="bodySmall" style={styles.caption}>
-          Connected to {serverUrl ? serverUrl.replace(/^https?:\/\//, '') : 'no server'}
-        </Text>
-      </View>
-
-      <Snackbar visible={!!message} onDismiss={() => setMessage('')} duration={3000}>
+          <Text style={[type.micro, styles.version]}>CivicFix for Android</Text>
+        </View>
+      </ScrollView>
+      <Snackbar visible={!!message} onDismiss={() => setMessage("")} duration={3500}>
         {message}
       </Snackbar>
-    </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
-  content: { paddingHorizontal: 24, paddingTop: 80, paddingBottom: 48 },
-  header: { alignItems: 'center', gap: 8, marginBottom: 24 },
-  avatar: { backgroundColor: '#2563eb' },
-  name: { fontWeight: '700' },
-  email: { color: '#64748b' },
-  role: { color: '#94a3b8', textTransform: 'capitalize' },
-  divider: { marginBottom: 24 },
-  section: { marginBottom: 24, gap: 12 },
-  sectionTitle: { fontWeight: '600' },
-  input: { marginBottom: 8 },
-  button: { marginTop: 4 },
-  caption: { color: '#94a3b8', textAlign: 'center' },
+  screen: { flex: 1, backgroundColor: colors.background },
+  content: { paddingBottom: space.xxxl },
+  body: { paddingHorizontal: space.lg, gap: space.xxl },
+  identity: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.lg,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.line,
+    padding: space.lg,
+  },
+  identityText: { flex: 1, gap: 2 },
+  group: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.line,
+    overflow: "hidden",
+  },
+  groupPadding: { padding: space.lg, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.lineStrong },
+  formTitle: { marginBottom: space.md },
+  passwordForm: { gap: space.md },
+  formButtons: { flexDirection: "row", gap: space.sm },
+  formButton: { flex: 1 },
+  version: { textAlign: "center", fontWeight: "400" },
 });
 
 export default ProfileScreen;

@@ -1,49 +1,61 @@
-import React, { useEffect, useState } from "react";
-import { Image, StyleSheet, View } from "react-native";
-import { Text } from "react-native-paper";
+import React, { useEffect, useRef, useState } from "react";
+import { Animated, StyleSheet, Text, View } from "react-native";
 import { photoUrl } from "../utils/api";
+import { Icon } from "../ui/components";
+import { colors } from "../ui/theme";
 
 /**
- * A photo stored on the CivicFix server. If it cannot be loaded, it says so
- * instead of leaving an empty box. Once the image has loaded its test ID gets
- * a "-loaded" suffix, which the end-to-end tests wait for.
+ * A photo stored on the CivicFix server. It fades in once loaded, and if it
+ * cannot be loaded it says so instead of leaving an empty box. Once loaded its
+ * test ID gets a "-loaded" suffix, which the end-to-end tests wait for.
  */
-const RemotePhoto = ({ url, style, resizeMode = "cover", testID, accessibilityLabel }) => {
+const RemotePhoto = ({ url, style, resizeMode = "cover", testID, accessibilityLabel, compact }) => {
   const [state, setState] = useState("loading");
-  useEffect(() => setState("loading"), [url]);
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    setState("loading");
+    opacity.setValue(0);
+  }, [url, opacity]);
 
   if (state === "failed") {
     return (
-      <View style={[style, styles.failed]} testID={testID ? `${testID}-failed` : undefined}>
-        <Text variant="bodySmall" style={styles.failedText}>
-          The photo could not be loaded. Pull down to try again.
-        </Text>
+      <View style={[styles.fallback, style]} testID={testID ? `${testID}-failed` : undefined}>
+        <Icon name="image-off-outline" size={compact ? 22 : 28} color={colors.faint} />
+        {!compact ? <Text style={styles.fallbackText}>The photo could not be loaded. Pull down to try again.</Text> : null}
       </View>
     );
   }
+
   return (
-    <Image
-      source={{ uri: photoUrl(url) }}
-      style={[styles.image, style]}
-      resizeMode={resizeMode}
-      accessible
-      accessibilityLabel={accessibilityLabel}
-      testID={testID ? `${testID}${state === "loaded" ? "-loaded" : ""}` : undefined}
-      onLoad={() => setState("loaded")}
-      onError={() => setState("failed")}
-    />
+    <View style={[styles.frame, style]}>
+      <Animated.Image
+        source={{ uri: photoUrl(url) }}
+        style={[StyleSheet.absoluteFill, { opacity }]}
+        resizeMode={resizeMode}
+        accessible
+        accessibilityLabel={accessibilityLabel}
+        testID={testID ? `${testID}${state === "loaded" ? "-loaded" : ""}` : undefined}
+        onLoad={() => {
+          setState("loaded");
+          Animated.timing(opacity, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+        }}
+        onError={() => setState("failed")}
+      />
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  image: { backgroundColor: "#e2e8f0" },
-  failed: {
-    backgroundColor: "#f1f5f9",
-    justifyContent: "center",
+  frame: { backgroundColor: "#e9edf2", overflow: "hidden" },
+  fallback: {
+    backgroundColor: colors.surfaceAlt,
     alignItems: "center",
+    justifyContent: "center",
     padding: 16,
+    gap: 8,
   },
-  failedText: { color: "#64748b", textAlign: "center" },
+  fallbackText: { color: colors.muted, fontSize: 13, textAlign: "center" },
 });
 
 export default RemotePhoto;

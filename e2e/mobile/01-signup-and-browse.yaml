@@ -5,9 +5,10 @@ name: Sign up, browse issues, filter by category, open an issue
     clearState: true
 - runFlow: _dismiss-system-dialogs.yaml
 - extendedWaitUntil:
-    visible: "Welcome Back.*"
+    visible: "Welcome back"
     timeout: 150000
 - assertVisible: "Server: .*"
+- takeScreenshot: 01-login
 - tapOn:
     id: "go-to-signup"
 - tapOn:
@@ -23,6 +24,7 @@ name: Sign up, browse issues, filter by category, open an issue
     id: "signup-confirm"
 - inputText: "meera-password-1"
 - hideKeyboard
+- takeScreenshot: 01-signup
 - tapOn:
     id: "signup-submit"
 - extendedWaitUntil:
@@ -48,7 +50,8 @@ name: Sign up, browse issues, filter by category, open an issue
 # Issue details are public, but this is not Meera's report
 - tapOn: "Deep pothole on MG Road"
 - extendedWaitUntil:
-    visible: "Updates"
+    visible:
+      id: "issue-detail"
     timeout: 30000
 - assertVisible: "Pothole"
 - assertVisible: "Reported"
@@ -58,8 +61,8 @@ name: Sign up, browse issues, filter by category, open an issue
 - tapOn:
     id: "filter-category-all"
 - assertVisible: "Garbage pile on 5th Cross"
-# My Reports is empty for a new account
-- tapOn: "My Reports"
+# My reports is empty for a new account
+- tapOn: "My reports"
 - extendedWaitUntil:
     visible: "You haven't reported anything yet."
     timeout: 30000

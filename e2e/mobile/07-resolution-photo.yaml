@@ -5,7 +5,7 @@ name: A citizen sees the city team's resolution photo on a fixed report
     clearState: true
 - runFlow: _dismiss-system-dialogs.yaml
 - extendedWaitUntil:
-    visible: "Welcome Back.*"
+    visible: "Welcome back"
     timeout: 150000
 - tapOn:
     id: "login-email"
@@ -20,13 +20,13 @@ name: A citizen sees the city team's resolution photo on a fixed report
 - extendedWaitUntil:
     visible: "Hello, Ravi"
     timeout: 60000
-- tapOn: "My Reports"
+- tapOn: "My reports"
 - scrollUntilVisible:
     element: "Blocked drain near the market"
     direction: DOWN
 # The card shows the fix photo instead of the original report photo.
 - scrollUntilVisible:
-    element: "Photo from the city team after the fix"
+    element: "Photo after the fix"
     direction: DOWN
 - takeScreenshot: 07-my-reports-fixed
 - tapOn: "Blocked drain near the market"
