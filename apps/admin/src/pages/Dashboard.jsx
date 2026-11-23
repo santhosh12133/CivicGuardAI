@@ -14,7 +14,6 @@ import {
   MenuItem,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
-import ViewIcon from "@mui/icons-material/Visibility";
 import DeleteIcon from "@mui/icons-material/Delete";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -102,17 +101,47 @@ const Dashboard = () => {
           />
         ) : null,
     },
-    { field: "title", headerName: "Title", flex: 1, minWidth: 200 },
+    { field: "title", headerName: "Title", flex: 1, minWidth: 220 },
+    {
+      field: "actions",
+      headerName: "",
+      width: isAdmin ? 124 : 80,
+      sortable: false,
+      filterable: false,
+      disableColumnMenu: true,
+      renderCell: (params) => (
+        <Box sx={{ display: "flex", gap: 0.5, alignItems: "center", height: "100%" }}>
+          <Button size="small" variant="outlined" onClick={() => navigate(`/issue/${params.row.id}`)}>
+            View
+          </Button>
+          {isAdmin && (
+            <Tooltip title="Delete issue">
+              <IconButton
+                size="small"
+                color="error"
+                aria-label="Delete"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDelete(params.row.id);
+                }}
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Box>
+      ),
+    },
     {
       field: "category",
       headerName: "Category",
-      width: 150,
+      width: 140,
       renderCell: (params) => categoryLabel(categories, params.row.category),
     },
     {
       field: "status",
       headerName: "Status",
-      width: 130,
+      width: 120,
       renderCell: (params) => <Chip label={params.value} color={STATUS_COLORS[params.value] || "default"} size="small" />,
     },
     {
@@ -149,7 +178,7 @@ const Dashboard = () => {
     {
       field: "needs_review",
       headerName: "Review",
-      width: 130,
+      width: 125,
       renderCell: (params) =>
         params.value ? (
           <Chip label="Needs Review" color="error" size="small" variant="outlined" />
@@ -160,48 +189,15 @@ const Dashboard = () => {
     {
       field: "reporter",
       headerName: "Reported by",
-      width: 170,
+      width: 150,
       sortable: false,
       renderCell: (params) => params.row.reporter?.name || "—",
     },
     {
       field: "created_at",
       headerName: "Reported",
-      width: 170,
+      width: 160,
       renderCell: (params) => formatDate(params.row.created_at || params.row.createdAt),
-    },
-    {
-      field: "actions",
-      headerName: "Actions",
-      width: isAdmin ? 210 : 110,
-      sortable: false,
-      filterable: false,
-      renderCell: (params) => (
-        <Box sx={{ display: "flex", gap: 1, alignItems: "center", height: "100%" }}>
-          <Button
-            variant="contained"
-            size="small"
-            startIcon={<ViewIcon />}
-            onClick={() => navigate(`/issue/${params.row.id}`)}
-          >
-            View
-          </Button>
-          {isAdmin && (
-            <Button
-              variant="outlined"
-              color="error"
-              size="small"
-              startIcon={<DeleteIcon />}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDelete(params.row.id);
-              }}
-            >
-              Delete
-            </Button>
-          )}
-        </Box>
-      ),
     },
   ];
 
@@ -335,6 +331,10 @@ const Dashboard = () => {
               rowHeight={56}
               pageSizeOptions={[10, 25, 50]}
               disableRowSelectionOnClick
+              // At most 50 rows per page: render every column so off-screen ones (reached by
+              // scrolling sideways) are complete and searchable with the browser's find.
+              disableVirtualization
+              onRowClick={(params) => navigate(`/issue/${params.row.id}`)}
               initialState={{
                 pagination: { paginationModel: { pageSize: 10 } },
               }}
@@ -342,6 +342,7 @@ const Dashboard = () => {
               sx={{
                 border: "none",
                 "& .MuiDataGrid-columnHeaderTitle": { fontWeight: 700 },
+                "& .MuiDataGrid-row": { cursor: "pointer" },
                 "& .row-overdue": { boxShadow: (theme) => `inset 3px 0 0 ${theme.palette.error.main}` },
               }}
             />
