@@ -49,10 +49,10 @@ jobs:
           - arch: arm64
             runner: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Check out Medical Claim AI (${{ env.MEDICAL_REF }})
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: santhosh12133/medical-claim-ai
           ref: ${{ env.MEDICAL_REF }}
@@ -209,7 +209,7 @@ jobs:
           - arch: arm64
             runner: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: ShellCheck the Oracle scripts
         run: shellcheck -S warning deploy/*.sh

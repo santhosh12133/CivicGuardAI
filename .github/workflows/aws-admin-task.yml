@@ -58,7 +58,7 @@ jobs:
             [ -n "$NAME" ] || { echo "::error::Enter a name"; exit 1; }
           fi
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           role-session-name: civicfix-admin-task-${{ github.run_id }}
