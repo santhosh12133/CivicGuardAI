@@ -191,24 +191,23 @@ jobs:
         run: |
           python3 -m pip install --quiet --user pillow || { echo "Pillow not available"; exit 0; }
           python3 - <<'PY'
-          import base64, glob, io, os
+          import base64, io, os, subprocess
           from PIL import Image
-          # Maestro versions differ in where takeScreenshot writes, so search for the files.
-          import subprocess
+          # Maestro writes takeScreenshot files (and failure captures) under each
+          # debug folder's .maestro/tests; the script adds end-<flow>.png.
           found = subprocess.run(
-              "find / -xdev \\( -name '0[0-9]-*.png' -o -name 'end-0*.png' \\) -not -path '*/node_modules/*' 2>/dev/null",
-              shell=True, capture_output=True, text=True,
-          ).stdout.split()
-          paths = sorted(set(found))
-          print(f"{len(paths)} screenshots:", ", ".join(paths)[:2000])
+              ["find", "mobile-e2e-results", "-name", "*.png", "-print0"], capture_output=True
+          ).stdout.decode().split("\0")
+          paths = sorted(p for p in found if p)
+          print(f"{len(paths)} screenshots")
           for path in paths:
-              if "/debug-" in path and "screenshot-" in os.path.basename(path):
-                  continue  # Maestro's own failure captures
+              flow = next((part[len("debug-"):] for part in path.split("/") if part.startswith("debug-")), "")
+              base = os.path.splitext(os.path.basename(path))[0]
+              name = "".join(c if c.isalnum() or c in "-_" else "_" for c in (f"{flow}__{base}" if flow else base))[:90]
               image = Image.open(path).convert("RGB")
               image.thumbnail((360, 800))
               buffer = io.BytesIO()
               image.save(buffer, "JPEG", quality=70)
-              name = os.path.splitext(os.path.basename(path))[0]
               print("SCREENSHOT", name, base64.b64encode(buffer.getvalue()).decode())
           PY
 
