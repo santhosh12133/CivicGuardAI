@@ -49,7 +49,7 @@ Details: [Authentication](../architecture/authentication.md).
 - HTTPS everywhere in production (ECS Express Mode endpoint, CloudFront; Render and Vercel terminate TLS). HSTS one year.
 - Database TLS verified against the RDS CA bundle on AWS.
 - CORS allow-list (`CORS_ORIGINS`); credentials are bearer tokens, not cookies, so CSRF does not apply.
-- Headers: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Permissions-Policy`, no `X-Powered-By`.
+- Headers: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Permissions-Policy`, no `X-Powered-By`. In front of it, Caddy sends `Referrer-Policy: strict-origin-when-cross-origin` for the portal: other sites see only the site address, and OpenStreetMap, which refuses tile requests without a referrer, can serve the map.
 - Errors: 5xx details hidden in production.
 
 ### Secrets and infrastructure

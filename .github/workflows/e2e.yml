@@ -157,7 +157,7 @@ jobs:
           STAFF_PASSWORD="$ADMIN_PASSWORD" node scripts/create-staff-user.js --email "$ADMIN_EMAIL" --name "E2E Admin" --role admin
           NODE_ENV=production DB_SYNC=true PORT=5000 nohup node server.js > "$RUNNER_TEMP/api.log" 2>&1 &
           for _ in $(seq 1 30); do curl -fsS http://localhost:5000/health && break; sleep 2; done
-          API_URL=http://localhost:5000 SEED_OUT="$RUNNER_TEMP/seed.json" PHOTO_OUT="$RUNNER_TEMP/gallery.jpg" node test/e2e/seed.js
+          API_URL=http://localhost:5000 SEED_RESOLVED=1 SEED_OUT="$RUNNER_TEMP/seed.json" PHOTO_OUT="$RUNNER_TEMP/gallery.jpg" node test/e2e/seed.js
 
       - name: Install Maestro
         run: |

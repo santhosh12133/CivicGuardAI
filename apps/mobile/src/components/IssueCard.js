@@ -1,5 +1,5 @@
 import React from "react";
-import { getApiBaseUrl } from "../utils/api";
+import { photoUrl } from "../utils/api";
 import { useCategories, categoryLabel, CATEGORY_ICONS } from "../utils/categories";
 import { StyleSheet, View } from "react-native";
 import { Card, Text, Chip } from "react-native-paper";
@@ -13,26 +13,10 @@ const STATUS_COLORS = {
 const IssueCard = ({ issue, onPress }) => {
   const categories = useCategories();
   const statusColor = STATUS_COLORS[issue.status] || "#64748b";
-  const normalizeUrl = (url) => {
-    if (!url) return url;
-    try {
-      const apiBase = getApiBaseUrl().replace(/\/$/, "");
-      const uploadsIndex = url.indexOf("/uploads/");
-      if (uploadsIndex !== -1) {
-        const path = url.substring(uploadsIndex);
-        return apiBase + path;
-      }
-      return url.replace(
-        /^(https?:\/\/)(localhost|127\.0\.0\.1|::1)(:\d+)?/,
-        apiBase
-      );
-    } catch (e) {
-      return url;
-    }
-  };
-
+  // A resolved issue shows the city team's photo of the fix.
+  const showsFix = issue.status === "Resolved" && Boolean(issue.resolved_photo_url);
   const thumbnail =
-    (issue.photo_url && normalizeUrl(issue.photo_url)) ||
+    photoUrl(showsFix ? issue.resolved_photo_url : issue.photo_url) ||
     "https://images.unsplash.com/photo-1529429617124-aee711fa4eec?auto=format&fit=crop&w=800&q=60";
 
   return (
@@ -41,6 +25,7 @@ const IssueCard = ({ issue, onPress }) => {
         source={{ uri: thumbnail }}
         style={styles.image}
         resizeMode="contain"
+        accessibilityLabel={showsFix ? "Photo of the fix from the city team" : "Photo of the reported problem"}
       />
       <Card.Content style={styles.content}>
         <Text variant="titleMedium" style={styles.title}>
@@ -65,6 +50,11 @@ const IssueCard = ({ issue, onPress }) => {
             </Chip>
           )}
         </View>
+        {showsFix ? (
+          <Text variant="bodySmall" style={styles.fixNote}>
+            Photo from the city team after the fix
+          </Text>
+        ) : null}
         {issue.address ? (
           <Text variant="bodySmall" style={styles.meta}>
             📍 {issue.address}
@@ -85,6 +75,10 @@ const IssueCard = ({ issue, onPress }) => {
 };
 
 const styles = StyleSheet.create({
+  fixNote: {
+    color: "#15803d",
+    marginTop: 8,
+  },
   card: {
     marginBottom: 16,
     borderRadius: 16,

@@ -24,6 +24,18 @@ export const hasBuiltInServer = Boolean(BUILT_IN_URL);
 let baseUrl = normalizeServerUrl(BUILT_IN_URL) || DEV_FALLBACK;
 export const getApiBaseUrl = () => baseUrl;
 
+/**
+ * Where to load a stored photo from. Upload URLs are rewritten to the server
+ * this app talks to, because the API may have built them with an address the
+ * phone cannot reach (localhost, a LAN IP, an older host name).
+ */
+export const photoUrl = (url) => {
+  if (!url) return url;
+  const uploadsIndex = url.indexOf("/uploads/");
+  if (uploadsIndex !== -1 && baseUrl) return baseUrl.replace(/\/$/, "") + url.substring(uploadsIndex);
+  return url;
+};
+
 // Free hosting (e.g. Render) puts the API to sleep after 15 idle minutes and
 // the first request can take close to a minute while it wakes up. Photo
 // uploads also run EXIF and duplicate checks, so allow plenty of time.

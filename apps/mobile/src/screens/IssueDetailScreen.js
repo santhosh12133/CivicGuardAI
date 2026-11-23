@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import {
   View,
   StyleSheet,
   ScrollView,
-  Image,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { Text, Button, Chip, Card } from "react-native-paper";
-import { useRoute } from "@react-navigation/native";
-import api, { getApiBaseUrl } from "../utils/api";
+import { useRoute, useFocusEffect } from "@react-navigation/native";
+import api from "../utils/api";
+import RemotePhoto from "../components/RemotePhoto";
 import { useCategories, categoryLabel, CATEGORY_ICONS } from "../utils/categories";
 
 const STATUS_COLORS = {
@@ -40,46 +41,36 @@ const IssueDetailScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    fetchIssueDetails();
-  }, [issueId]);
+  const [refreshing, setRefreshing] = useState(false);
+  const loaded = useRef(false);
 
-  const normalizeUrl = (url) => {
-    if (!url) return url;
+  // Loads the issue; later loads keep the current screen until the new data arrives.
+  const fetchIssueDetails = useCallback(async () => {
     try {
-      // Replace localhost or 127.0.0.1 (backend may have used localhost when
-      // generating upload URLs) with the mobile API base host so images are
-      // reachable from the device/emulator.
-      const apiBase = getApiBaseUrl().replace(/\/$/, "");
-      // If the URL points to the uploads path on any host, rewrite it to use
-      // the configured API base. This covers cases where the backend built
-      // the URL with localhost, a hostname, or a different LAN IP.
-      const uploadsIndex = url.indexOf("/uploads/");
-      if (uploadsIndex !== -1) {
-        const path = url.substring(uploadsIndex);
-        return apiBase + path;
-      }
-      return url.replace(
-        /^(https?:\/\/)(localhost|127\.0\.0\.1|::1)(:\d+)?/,
-        apiBase
-      );
-    } catch (e) {
-      return url;
-    }
-  };
-
-  const fetchIssueDetails = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+      if (!loaded.current) setLoading(true);
       const { data } = await api.get(`/api/issues/${issueId}`);
-      const issueData = data.issue || data;
-      setIssue(issueData);
+      setIssue(data.issue || data);
+      setError(null);
+      loaded.current = true;
     } catch (err) {
-      setError(err.message || "Failed to load issue details");
+      if (!loaded.current) setError(err.message || "Failed to load issue details");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  }, [issueId]);
+
+  // Reload every time the screen is shown, so a status change or a resolution
+  // photo from the city team appears without restarting the app.
+  useFocusEffect(
+    useCallback(() => {
+      fetchIssueDetails();
+    }, [fetchIssueDetails])
+  );
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchIssueDetails();
   };
 
   if (loading) {
@@ -105,7 +96,11 @@ const IssueDetailScreen = ({ navigation }) => {
   const statusColor = STATUS_COLORS[issue.status] || "#64748b";
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
       {/* Header */}
       <View style={styles.header}>
         <Button
@@ -146,10 +141,12 @@ const IssueDetailScreen = ({ navigation }) => {
             <Text variant="titleSmall" style={styles.photoLabel}>
               Issue Photo
             </Text>
-            <Image
-              source={{ uri: normalizeUrl(issue.photo_url) }}
+            <RemotePhoto
+              url={issue.photo_url}
               style={styles.issueImage}
               resizeMode="contain"
+              testID="issue-photo"
+              accessibilityLabel="Photo of the reported problem"
             />
           </Card.Content>
         </Card>
@@ -174,6 +171,27 @@ const IssueDetailScreen = ({ navigation }) => {
           </Card.Content>
         </Card>
       )}
+
+      {/* The city team's photo of the finished work */}
+      {issue.status === "Resolved" && issue.resolved_photo_url ? (
+        <Card style={styles.resolvedCard}>
+          <Card.Content>
+            <Text variant="titleSmall" style={styles.resolvedTitle}>
+              Resolution photo
+            </Text>
+            <Text variant="bodySmall" style={styles.resolvedSubtext}>
+              Taken by the city team when the work was done.
+            </Text>
+            <RemotePhoto
+              url={issue.resolved_photo_url}
+              style={styles.resolvedImage}
+              resizeMode="contain"
+              testID="resolution-photo"
+              accessibilityLabel="Resolution photo from the city team"
+            />
+          </Card.Content>
+        </Card>
+      ) : null}
 
       {/* Description */}
       <Card style={styles.card}>
@@ -217,25 +235,6 @@ const IssueDetailScreen = ({ navigation }) => {
         </Card.Content>
       </Card>
 
-      {/* Resolved Photo (if status is Resolved) */}
-      {issue.status === "Resolved" && issue.resolved_photo_url && (
-        <Card style={styles.resolvedCard}>
-          <Card.Content>
-            <Text variant="titleSmall" style={styles.resolvedTitle}>
-              ✓ Resolution Photo
-            </Text>
-            <Text variant="bodySmall" style={styles.resolvedSubtext}>
-              This issue has been resolved
-            </Text>
-            <Image
-              source={{ uri: normalizeUrl(issue.resolved_photo_url) }}
-              style={styles.resolvedImage}
-              resizeMode="contain"
-            />
-          </Card.Content>
-        </Card>
-      )}
-
       {/* Timeline of updates from the city team */}
       {Array.isArray(issue.updates) && issue.updates.length > 0 && (
         <Card style={styles.card}>
@@ -264,10 +263,10 @@ const IssueDetailScreen = ({ navigation }) => {
                     </Text>
                   ) : null}
                   {update.photo_url ? (
-                    <Image
-                      source={{ uri: normalizeUrl(update.photo_url) }}
+                    <RemotePhoto
+                      url={update.photo_url}
                       style={styles.timelinePhoto}
-                      resizeMode="cover"
+                      accessibilityLabel="Photo added to this update"
                     />
                   ) : null}
                   <Text variant="bodySmall" style={styles.timelineMeta}>
@@ -420,7 +419,7 @@ const styles = StyleSheet.create({
     color: "#1e293b",
   },
   resolvedCard: {
-    marginTop: 16,
+    marginTop: 0,
     marginBottom: 12,
     backgroundColor: "#dcfce7",
     borderRadius: 12,

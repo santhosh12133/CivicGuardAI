@@ -60,6 +60,8 @@ const IssueMap = ({ issues, categories = [], height = 480, onOpen, interactive =
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
           maxZoom={19}
+          // OpenStreetMap's tile policy requires a referrer; send just the site address.
+          referrerPolicy="strict-origin-when-cross-origin"
         />
         <FitToIssues points={points} />
         {located.map((issue) => {
