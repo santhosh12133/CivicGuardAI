@@ -1,0 +1,34 @@
+# CivicFix behind Caddy: the admin portal at /, the API at /api (plus /uploads and /health).
+# SITE_ADDRESS is a host name (automatic HTTPS from Let's Encrypt), e.g. civicfix.140-238-1-2.sslip.io,
+# or http://name for plain HTTP.
+#
+# Standalone server: mounted as Caddy's configuration by deploy/docker-compose.standalone.yml.
+# Shared server: deploy/setup-server.sh writes a copy with the address filled in to the other app's
+# Caddy sites folder (/opt/caddy-sites/civicfix.caddy).
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	request_body {
+		max_size 12MB
+	}
+
+	@api path /api/* /uploads/* /health
+	handle @api {
+		reverse_proxy civicfix-api:5000
+	}
+
+	handle {
+		reverse_proxy civicfix-admin:80
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		-Server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

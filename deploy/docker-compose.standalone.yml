@@ -1,0 +1,45 @@
+# Production overlay for a server of its own (e.g. an Oracle Cloud Always Free VM): CivicFix's own Caddy
+# serves ports 80/443 with automatic HTTPS. Used by deploy/setup-server.sh (it puts
+# COMPOSE_FILE=docker-compose.yml:deploy/docker-compose.standalone.yml in .env, so plain `docker compose`
+# commands in /opt/civicfix use this file too).
+#
+# Only Caddy is reachable from outside. The API, portal and database ports are not published, because
+# Docker-published ports bypass the host firewall.
+services:
+  civicfix-api:
+    ports: !reset []
+
+  civicfix-admin:
+    ports: !reset []
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?Set SITE_ADDRESS in .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      civicfix-api:
+        condition: service_healthy
+      civicfix-admin:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  caddy_data:
+  caddy_config:

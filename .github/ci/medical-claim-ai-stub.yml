@@ -1,4 +1,4 @@
-# CI only: run Medical Claim AI's real Caddy (its docker-compose.prod.yml + Caddyfile) with tiny stand-ins for
+# CI only: run Medical Claim AI's real Caddy (its docker-compose.prod.yml (medical-claim-ai's own file) + Caddyfile) with tiny stand-ins for
 # its API and website, so CivicFix can be tested behind it without building the medical app.
 services:
   api:

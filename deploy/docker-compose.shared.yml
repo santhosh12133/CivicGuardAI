@@ -1,6 +1,6 @@
-# Production overlay for a server whose ports 80/443 belong to another app's Caddy
-# (Medical Claim AI on the Oracle server). Used by deploy/setup-server.sh:
-#   docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml up -d --build
+# Production overlay for a server whose ports 80/443 belong to another app's Caddy (e.g. Medical Claim AI).
+# Used by deploy/setup-server.sh in shared mode (it puts
+# COMPOSE_FILE=docker-compose.yml:deploy/docker-compose.shared.yml in .env).
 #
 # - No ports are published at all: Caddy reaches the API and portal over the shared Docker network
 #   "caddy-shared" (created by Medical Claim AI's setup script). The database stays on CivicFix's own network.

@@ -1,6 +1,7 @@
 # CivicFix with Docker Compose: PostgreSQL, the API and the admin portal.
 #
-# On a server, use deploy/setup-server.sh (it adds deploy/docker-compose.prod.yml and HTTPS through Caddy).
+# On a server, use deploy/setup-server.sh: it adds deploy/docker-compose.standalone.yml (own Caddy, HTTPS on
+# 80/443) or deploy/docker-compose.shared.yml (behind another app's Caddy).
 # Locally: create .env with at least POSTGRES_PASSWORD and JWT_SECRET (see deploy/env.example), then
 #   docker compose up -d --build
 # and open http://127.0.0.1:8080 (portal) and http://127.0.0.1:5000/health (API).

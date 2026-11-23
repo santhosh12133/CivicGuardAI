@@ -1,29 +1,36 @@
 #!/usr/bin/env bash
-# Install or update CivicFix on a server whose ports 80/443 are already served by Medical Claim AI's Caddy
-# (https://github.com/santhosh12133/medical-claim-ai). CivicFix publishes no ports: Caddy reaches it over the
-# shared Docker network "caddy-shared" and loads its site file from the shared sites folder.
-# Safe to re-run: it updates the code and keeps secrets, data and accounts. It never touches the other app's
-# containers, data or files, except adding/replacing its own site file and asking Caddy to reload.
+# One-command install / update of CivicFix (API, admin portal, PostgreSQL) with Docker Compose and free HTTPS.
+# Safe to re-run: it updates the code and keeps secrets, data and accounts.
 #
-#   curl -fsSL https://raw.githubusercontent.com/santhosh12133/CivicGuardAI/main/deploy/setup-server.sh \
-#     | sudo bash -s -- --admin-email you@example.com
+#   curl -fsSL https://raw.githubusercontent.com/santhosh12133/CivicGuardAI/main/deploy/setup-server.sh -o setup.sh
+#   sudo bash setup.sh --admin-email you@example.com
+#
+# Two modes, chosen automatically (--mode to force):
+#   standalone  a server of its own, e.g. an Oracle Cloud Always Free VM: installs Docker, adds swap on small
+#               machines, opens 80/443 in the host firewall and runs CivicFix's own Caddy on 80/443.
+#   shared      ports 80/443 already belong to Medical Claim AI's Caddy on this server: CivicFix publishes no
+#               ports, joins the "caddy-shared" network and adds its site file to that Caddy. It never touches
+#               the other app's containers or data.
 #
 # Options:
-#   --admin-email EMAIL   create an admin account for the portal with a random password, saved (not printed)
-#                         to /root/civicfix-credentials.txt. An existing account is left unchanged.
+#   --admin-email EMAIL   create a portal admin with a random password, saved (not printed) to
+#                         /root/civicfix-credentials.txt. An existing account is left unchanged.
 #   --admin-name NAME     its display name (default "Administrator")
 #   --domain auto|NAME    auto (default): civicfix.<ip-with-dashes>.sslip.io; NAME: your own domain
 #                         (point its DNS A record at this server first)
 #   --name LABEL          first label of the auto address (default civicfix)
 #   --public-ip ADDR      use ADDR instead of the detected public IP
 #   --site-address ADDR   exact Caddy site address, e.g. http://civicfix.localhost (testing)
-#   --edge-project NAME   Docker Compose project that owns Caddy (default medical-claim-ai)
+#   --mode auto|standalone|shared
+#   --edge-project NAME   shared mode: Compose project that owns Caddy (default medical-claim-ai)
 #   --app-dir DIR         install directory (default /opt/civicfix)
 #   --branch NAME         git branch (default main)
 #   --repo URL            git repository
 #   --no-update           use the code already in --app-dir as it is (no git pull)
+#   --no-firewall         standalone: do not open ports 80/443 in the host firewall
+#   --no-swap             standalone: do not create a swap file on small machines
 #   --no-backups          do not install the daily database backup job
-#   --min-free-mb N       refuse to build when less than N MB of memory is available (default 700)
+#   --min-free-mb N       refuse to build with less than N MB of memory available (default 700)
 set -euo pipefail
 
 REPO_URL="https://github.com/santhosh12133/CivicGuardAI.git"
@@ -33,10 +40,13 @@ DOMAIN="auto"
 NAME_LABEL="civicfix"
 PUBLIC_IP_OVERRIDE=""
 SITE_ADDRESS=""
+MODE="auto"
 EDGE_PROJECT="medical-claim-ai"
 ADMIN_EMAIL=""
 ADMIN_NAME="Administrator"
 UPDATE=1
+FIREWALL=1
+SWAP=1
 BACKUPS=1
 MIN_FREE_MB=700
 CREDENTIALS_FILE="/root/civicfix-credentials.txt"
@@ -54,51 +64,118 @@ while [ $# -gt 0 ]; do
     --name) NAME_LABEL="${2:?}"; shift 2 ;;
     --public-ip) PUBLIC_IP_OVERRIDE="${2:?}"; shift 2 ;;
     --site-address) SITE_ADDRESS="${2:?}"; shift 2 ;;
+    --mode) MODE="${2:?}"; shift 2 ;;
     --edge-project) EDGE_PROJECT="${2:?}"; shift 2 ;;
     --app-dir) APP_DIR="${2:?}"; shift 2 ;;
     --branch) BRANCH="${2:?}"; shift 2 ;;
     --repo) REPO_URL="${2:?}"; shift 2 ;;
     --no-update) UPDATE=0; shift ;;
+    --no-firewall) FIREWALL=0; shift ;;
+    --no-swap) SWAP=0; shift ;;
     --no-backups) BACKUPS=0; shift ;;
     --min-free-mb) MIN_FREE_MB="${2:?}"; shift 2 ;;
-    -h|--help) sed -n '2,28p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,36p' "$0"; exit 0 ;;
     *) die "Unknown option: $1 (see --help)" ;;
   esac
 done
 
 [ "$(id -u)" -eq 0 ] || die "Run as root: sudo bash setup-server.sh ..."
 [[ "$NAME_LABEL" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]] || die "--name must be lower-case letters, digits and dashes"
+case "$MODE" in auto|standalone|shared) ;; *) die "--mode must be auto, standalone or shared" ;; esac
 
 # ----------------------------------------------------------------------------- server
 log "Checking the server"
+. /etc/os-release
+case "${ID:-}" in
+  ubuntu|debian) ;;
+  *) die "This script supports Ubuntu and Debian (found ${PRETTY_NAME:-unknown}). On Oracle Cloud choose an Ubuntu image." ;;
+esac
 MEM_MB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
-AVAIL_MB=$(awk '/MemAvailable/ {m=$2} /SwapFree/ {s=$2} END {print int((m+s)/1024)}' /proc/meminfo)
-echo "$(. /etc/os-release && echo "$PRETTY_NAME"), $(uname -m), $(nproc) CPU, ${MEM_MB} MB RAM, ${AVAIL_MB} MB available (RAM + swap)"
-[ "$AVAIL_MB" -ge "$MIN_FREE_MB" ] \
-  || die "Only ${AVAIL_MB} MB of memory available; CivicFix needs about ${MIN_FREE_MB} MB to build and run beside the other app. Nothing was changed."
+echo "$PRETTY_NAME, $(uname -m), $(nproc) CPU, ${MEM_MB} MB RAM"
 
-command -v docker >/dev/null 2>&1 || die "Docker is not installed. This script adds CivicFix to a server that already runs Medical Claim AI."
+# Which mode? Shared when Medical Claim AI's Caddy is running here; otherwise a server of its own.
+edge_caddy() {
+  command -v docker >/dev/null 2>&1 || return 0
+  docker ps -q --filter "label=com.docker.compose.project=$EDGE_PROJECT" --filter label=com.docker.compose.service=caddy 2>/dev/null | head -1
+}
+CADDY=$(edge_caddy)
+if [ "$MODE" = auto ]; then
+  if [ -n "$CADDY" ]; then MODE=shared; else MODE=standalone; fi
+fi
+echo "Mode: $MODE"
+
+if [ "$MODE" = standalone ]; then
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq
+  apt-get install -y -qq ca-certificates curl git openssl cron iproute2 >/dev/null
+
+  if [ "$SWAP" -eq 1 ] && [ "$MEM_MB" -lt 4000 ] && ! swapon --noheadings | grep -q .; then
+    log "Adding a 4 GB swap file (lets small machines build the app without running out of memory)"
+    fallocate -l 4G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=4096 status=none
+    chmod 600 /swapfile && mkswap /swapfile >/dev/null && swapon /swapfile
+    grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  fi
+
+  if ! command -v docker >/dev/null 2>&1; then
+    log "Installing Docker"
+    curl -fsSL https://get.docker.com | sh
+  fi
+  systemctl enable --now docker >/dev/null 2>&1 || true
+
+  # Ports 80/443 must be free, or already ours from an earlier run.
+  OURS=$(docker ps -q --filter label=com.docker.compose.project=civicfix --filter label=com.docker.compose.service=caddy)
+  if [ -z "$OURS" ] && ss -Hltn '( sport = :80 or sport = :443 )' | grep -q .; then
+    die "Ports 80/443 are already in use by another program:
+$(ss -Hltnp '( sport = :80 or sport = :443 )')
+If that is Medical Claim AI's Caddy, re-run with --mode shared."
+  fi
+
+  if [ "$FIREWALL" -eq 1 ]; then
+    log "Opening ports 80 and 443 in the host firewall"
+    if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
+      ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null; ufw allow 443/udp >/dev/null
+    fi
+    # Oracle Cloud Ubuntu images ship iptables rules that reject everything except SSH.
+    if command -v iptables >/dev/null 2>&1 && iptables -S INPUT 2>/dev/null | grep -q -- "-j REJECT"; then
+      for rule in "-p tcp --dport 80" "-p tcp --dport 443" "-p udp --dport 443"; do
+        # shellcheck disable=SC2086
+        iptables -C INPUT $rule -m state --state NEW -j ACCEPT 2>/dev/null \
+          || iptables -I INPUT 1 $rule -m state --state NEW -j ACCEPT
+      done
+      if command -v netfilter-persistent >/dev/null 2>&1; then netfilter-persistent save >/dev/null 2>&1 || true; fi
+    fi
+  fi
+fi
+
+AVAIL_MB=$(awk '/MemAvailable/ {m=$2} /SwapFree/ {s=$2} END {print int((m+s)/1024)}' /proc/meminfo)
+echo "Memory available (RAM + swap): ${AVAIL_MB} MB"
+[ "$AVAIL_MB" -ge "$MIN_FREE_MB" ] \
+  || die "Only ${AVAIL_MB} MB of memory available; CivicFix needs about ${MIN_FREE_MB} MB to build and run. Nothing else was changed."
+
+command -v docker >/dev/null 2>&1 || die "Docker is not installed"
 command -v git >/dev/null 2>&1 || die "git is not installed (apt-get install -y git)"
 COMPOSE_VERSION=$(docker compose version --short 2>/dev/null | sed 's/^v//') || die "Docker Compose plugin missing"
-printf '2.24.4\n%s\n' "$COMPOSE_VERSION" | sort -V -C || die "Docker Compose $COMPOSE_VERSION is too old (need 2.24.4+)"
+printf '2.24.4\n%s\n' "$COMPOSE_VERSION" | sort -V -C \
+  || die "Docker Compose $COMPOSE_VERSION is too old (need 2.24.4+). Update Docker: curl -fsSL https://get.docker.com | sh"
 
 # ----------------------------------------------------------------------------- shared Caddy
-log "Checking the shared web server (Caddy of project '$EDGE_PROJECT')"
-CADDY=$(docker ps -q --filter "label=com.docker.compose.project=$EDGE_PROJECT" --filter label=com.docker.compose.service=caddy | head -1)
-UPDATE_EDGE="Update Medical Claim AI first (it adds the shared network and sites folder):
-  sudo bash /opt/medical-claim-ai/deploy/setup-server.sh"
-[ -n "$CADDY" ] || die "No running Caddy container found for project '$EDGE_PROJECT'. $UPDATE_EDGE"
-docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$CADDY" | grep -qw caddy-shared \
-  || die "Caddy is not on the 'caddy-shared' network. $UPDATE_EDGE"
-SITES_DIR=$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/etc/caddy/sites"}}{{.Source}}{{end}}{{end}}' "$CADDY")
-[ -n "$SITES_DIR" ] && [ -d "$SITES_DIR" ] || die "Caddy has no sites folder mounted at /etc/caddy/sites. $UPDATE_EDGE"
-docker exec "$CADDY" grep -q '^import /etc/caddy/sites/' /etc/caddy/Caddyfile \
-  || die "Caddy's Caddyfile does not import /etc/caddy/sites. $UPDATE_EDGE"
-EDGE_SITE=$(docker exec "$CADDY" printenv SITE_ADDRESS 2>/dev/null || true)
-echo "Caddy: OK (sites folder $SITES_DIR; other site: ${EDGE_SITE:-unknown})"
-
 caddy_validate() { docker exec "$CADDY" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1; }
-caddy_validate || die "Caddy's current configuration is already invalid; fix that before adding a site. Nothing was changed."
+EDGE_SITE=""
+if [ "$MODE" = shared ]; then
+  log "Checking the shared web server (Caddy of project '$EDGE_PROJECT')"
+  UPDATE_EDGE="Update Medical Claim AI first (it adds the shared network and sites folder):
+  sudo bash /opt/medical-claim-ai/deploy/setup-server.sh"
+  [ -n "$CADDY" ] || die "No running Caddy container found for project '$EDGE_PROJECT'. $UPDATE_EDGE"
+  docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$CADDY" | grep -qw caddy-shared \
+    || die "Caddy is not on the 'caddy-shared' network. $UPDATE_EDGE"
+  SITES_DIR=$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/etc/caddy/sites"}}{{.Source}}{{end}}{{end}}' "$CADDY")
+  [ -n "$SITES_DIR" ] && [ -d "$SITES_DIR" ] || die "Caddy has no sites folder mounted at /etc/caddy/sites. $UPDATE_EDGE"
+  docker exec "$CADDY" grep -q '^import /etc/caddy/sites/' /etc/caddy/Caddyfile \
+    || die "Caddy's Caddyfile does not import /etc/caddy/sites. $UPDATE_EDGE"
+  EDGE_SITE=$(docker exec "$CADDY" printenv SITE_ADDRESS 2>/dev/null || true)
+  echo "Caddy: OK (sites folder $SITES_DIR; other site: ${EDGE_SITE:-unknown})"
+  caddy_validate || die "Caddy's current configuration is already invalid; fix that before adding a site. Nothing was changed."
+fi
 
 # ----------------------------------------------------------------------------- code
 if [ -d "$APP_DIR/.git" ]; then
@@ -115,7 +192,6 @@ else
   git clone -q --depth 1 --branch "$BRANCH" "$REPO_URL" "$APP_DIR"
 fi
 cd "$APP_DIR"
-COMPOSE=(docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml)
 
 # ----------------------------------------------------------------------------- address
 if [ -z "$SITE_ADDRESS" ]; then
@@ -126,6 +202,8 @@ if [ -z "$SITE_ADDRESS" ]; then
     SITE_ADDRESS="$NAME_LABEL.${PUBLIC_IP//./-}.sslip.io"
   else
     SITE_ADDRESS="$DOMAIN"
+    RESOLVED=$(getent ahostsv4 "$DOMAIN" | awk 'NR==1 {print $1}' || true)
+    [ -n "$RESOLVED" ] || warn "$DOMAIN does not resolve yet; HTTPS will fail until its DNS A record points here."
   fi
 fi
 case "$SITE_ADDRESS" in
@@ -135,7 +213,7 @@ case "$SITE_ADDRESS" in
 esac
 HOST="${HOST%%/*}"
 [[ "$HOST" =~ ^[A-Za-z0-9.-]+(:[0-9]+)?$ ]] || die "Invalid address: $SITE_ADDRESS"
-[ "$SITE_ADDRESS" != "${EDGE_SITE:-}" ] || die "$SITE_ADDRESS is already the other app's address; choose another --name"
+[ "$SITE_ADDRESS" != "$EDGE_SITE" ] || die "$SITE_ADDRESS is already the other app's address; choose another --name"
 echo "Public address: $ORIGIN"
 
 # ----------------------------------------------------------------------------- configuration
@@ -161,6 +239,8 @@ fi
 chown root:root .env && chmod 600 .env
 [ -n "$(env_value POSTGRES_PASSWORD)" ] || set_env POSTGRES_PASSWORD "$(openssl rand -hex 24)"
 [ -n "$(env_value JWT_SECRET)" ] || set_env JWT_SECRET "$(openssl rand -hex 32)"
+# Plain `docker compose` commands in $APP_DIR (and backup.sh) pick the right files from this line.
+set_env COMPOSE_FILE "docker-compose.yml:deploy/docker-compose.$MODE.yml"
 set_env SITE_ADDRESS "$SITE_ADDRESS"
 set_env CORS_ORIGINS "$ORIGIN"
 set_env API_HOST "$HOST"
@@ -169,65 +249,43 @@ set_env PUBLIC_API_URL "$ORIGIN"
 set_env ADMIN_URL "$ORIGIN"
 set_env VITE_API_URL "$ORIGIN/api"
 umask 022
+COMPOSE=(docker compose)
 
 # ----------------------------------------------------------------------------- start
-log "Building and starting CivicFix (the first build takes 5-10 minutes on 1 CPU)"
-"${COMPOSE[@]}" up -d --build --remove-orphans --wait --wait-timeout 900 \
+log "Building and starting CivicFix (the first build takes 5-15 minutes on a small server)"
+"${COMPOSE[@]}" up -d --build --remove-orphans --wait --wait-timeout 1200 \
   || {
     "${COMPOSE[@]}" logs --tail 60
     "${COMPOSE[@]}" ps -a --format 'table {{.Service}}\t{{.State}}\t{{.Status}}'
-    die "CivicFix did not become healthy (the other app is unaffected). Re-run once; if it fails again, send the table above."
+    die "CivicFix did not become healthy. Re-run the same command once (a slow first start can time out); if it fails again, send the table above."
   }
 # The portal is built for one public address: always recreate it so a changed address takes effect.
 "${COMPOSE[@]}" up -d --no-deps --force-recreate --wait --wait-timeout 120 civicfix-admin
 "${COMPOSE[@]}" ps
 
-# ----------------------------------------------------------------------------- route through Caddy
-log "Adding $HOST to the shared web server"
-SITE_FILE="$SITES_DIR/$SITE_FILE_NAME"
-BACKUP_FILE="$SITES_DIR/.$SITE_FILE_NAME.previous"
-[ ! -f "$SITE_FILE" ] || cp -p "$SITE_FILE" "$BACKUP_FILE"
-TMP_SITE=$(mktemp)
-cat > "$TMP_SITE" <<EOF
-# CivicFix: written by $APP_DIR/deploy/setup-server.sh. Edits here are replaced on the next run.
-$SITE_ADDRESS {
-	encode zstd gzip
-
-	request_body {
-		max_size 12MB
-	}
-
-	@api path /api/* /uploads/* /health
-	handle @api {
-		reverse_proxy civicfix-api:5000
-	}
-
-	handle {
-		reverse_proxy civicfix-admin:80
-	}
-
-	header {
-		X-Content-Type-Options nosniff
-		Referrer-Policy no-referrer
-		-Server
-	}
-
-	log {
-		output stdout
-		format console
-	}
-}
-EOF
-chmod 644 "$TMP_SITE" && mv "$TMP_SITE" "$SITE_FILE"
-if ! caddy_validate; then
-  if [ -f "$BACKUP_FILE" ]; then mv "$BACKUP_FILE" "$SITE_FILE"; else rm -f "$SITE_FILE"; fi
-  docker exec "$CADDY" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile 2>&1 | tail -5 || true
-  die "Caddy rejected the CivicFix site; the previous configuration was restored and is still running."
+# ----------------------------------------------------------------------------- shared mode: add the site
+if [ "$MODE" = shared ]; then
+  log "Adding $HOST to the shared web server"
+  SITE_FILE="$SITES_DIR/$SITE_FILE_NAME"
+  BACKUP_FILE="$SITES_DIR/.$SITE_FILE_NAME.previous"
+  [ ! -f "$SITE_FILE" ] || cp -p "$SITE_FILE" "$BACKUP_FILE"
+  TMP_SITE=$(mktemp)
+  {
+    echo "# CivicFix: written by $APP_DIR/deploy/setup-server.sh from deploy/Caddyfile. Edits here are replaced on the next run."
+    sed -e '/^#/d' -e "s|{\$SITE_ADDRESS}|$SITE_ADDRESS|" deploy/Caddyfile
+  } > "$TMP_SITE"
+  grep -q "^$SITE_ADDRESS {" "$TMP_SITE" || die "Could not prepare the site file"
+  chmod 644 "$TMP_SITE" && mv "$TMP_SITE" "$SITE_FILE"
+  if ! caddy_validate; then
+    if [ -f "$BACKUP_FILE" ]; then mv "$BACKUP_FILE" "$SITE_FILE"; else rm -f "$SITE_FILE"; fi
+    docker exec "$CADDY" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile 2>&1 | tail -5 || true
+    die "Caddy rejected the CivicFix site; the previous configuration was restored and is still running."
+  fi
+  docker exec "$CADDY" caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 \
+    || die "Caddy could not reload. It keeps serving its previous configuration. Check: docker logs $CADDY"
+  rm -f "$BACKUP_FILE"
+  echo "Site file: $SITE_FILE"
 fi
-docker exec "$CADDY" caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 \
-  || die "Caddy could not reload. It keeps serving its previous configuration. Check: docker logs $CADDY"
-rm -f "$BACKUP_FILE"
-echo "Site file: $SITE_FILE"
 
 # ----------------------------------------------------------------------------- admin account
 if [ -n "$ADMIN_EMAIL" ]; then
@@ -269,7 +327,7 @@ else
   probe() { curl -fsS --max-time 10 -H "Host: $HOST" "http://127.0.0.1$1"; }
 fi
 OK=0
-for _ in $(seq 1 30); do   # the first HTTPS certificate can take a minute
+for _ in $(seq 1 45); do   # the first HTTPS certificate can take a minute or two
   HEALTH=$(probe /health 2>/dev/null || true)
   if [[ "$HEALTH" == *'"database":"ok"'* ]]; then OK=1; break; fi
   sleep 4
@@ -280,10 +338,15 @@ if [ "$OK" -eq 1 ]; then
   PAGE=$(probe / 2>/dev/null || true)
   if [[ "$PAGE" == *'<title>CivicFix Admin</title>'* ]]; then echo "Admin portal:  OK"; else warn "Admin portal did not answer"; fi
 else
-  warn "CivicFix did not answer through Caddy yet. For HTTPS this usually means the certificate could not be
-  issued yet; check: docker logs --tail 50 $CADDY"
+  if [ "$MODE" = standalone ]; then
+    warn "CivicFix did not answer over HTTPS yet. Usually ports 80/443 are closed in the cloud firewall
+  (Oracle: VCN security list ingress rules), so the certificate could not be issued.
+  Check: cd $APP_DIR && sudo docker compose logs caddy"
+  else
+    warn "CivicFix did not answer through Caddy yet; check: docker logs --tail 50 $CADDY"
+  fi
 fi
-if [ -n "${EDGE_SITE:-}" ] && [[ "$EDGE_SITE" != :* ]]; then
+if [ "$MODE" = shared ] && [ -n "$EDGE_SITE" ] && [[ "$EDGE_SITE" != :* ]]; then
   if curl -fsS --max-time 10 --resolve "$EDGE_SITE:443:127.0.0.1" "https://$EDGE_SITE/api/health/ready" >/dev/null 2>&1; then
     echo "Other app:     OK (https://$EDGE_SITE)"
   else
@@ -302,7 +365,7 @@ cat <<EOF
  Android app:      server address $ORIGIN
  Admin password:   $( [ -f "$CREDENTIALS_FILE" ] && echo "sudo cat $CREDENTIALS_FILE" || echo "create an admin: re-run with --admin-email you@example.com" )
  Update:           re-run this script (keeps data, secrets and accounts)
- Logs:             cd $APP_DIR && sudo ${COMPOSE[*]} logs -f
+ Logs:             cd $APP_DIR && sudo docker compose logs -f
  Backups:          $( [ "$BACKUPS" -eq 1 ] && echo "daily to /var/backups/civicfix" || echo "not installed" )
 ------------------------------------------------------------------
 EOF

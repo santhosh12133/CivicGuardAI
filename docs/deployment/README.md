@@ -10,7 +10,7 @@ CivicFix has three deployable parts:
 
 ## Choose a hosting option
 
-Also: [Shared Oracle Cloud server](oracle-cloud.md) — Docker Compose next to another app, behind its Caddy (free HTTPS, one small VM).
+Also: [Oracle Cloud](oracle-cloud.md) — Docker Compose on one Always Free VM with free HTTPS, created from Oracle Cloud Shell (can also share a server with Medical Claim AI).
 
 | | [AWS](aws.md) (recommended) | [Render + Vercel](render-vercel.md) |
 |---|---|---|

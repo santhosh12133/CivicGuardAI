@@ -34,7 +34,7 @@ Start with the section that matches what you want to do.
 | [Deployment overview](deployment/README.md) | Hosting options, launch checklist, rollback |
 | [Deploy on AWS](deployment/aws.md) | Recommended production setup with GitHub Actions |
 | [Deploy on Render + Vercel](deployment/render-vercel.md) | Free trial setup |
-| [Shared Oracle Cloud server](deployment/oracle-cloud.md) | Docker Compose behind another app's Caddy |
+| [Oracle Cloud](deployment/oracle-cloud.md) | Docker Compose on an Always Free VM, free HTTPS |
 | [Android app releases](deployment/android-app.md) | Signing, building and publishing the APK |
 | [Sign-in providers](deployment/sign-in-providers.md) | Email (SES), SMS (SNS) and Google sign-in setup |
 | [Release process](deployment/release-process.md) | Versioning, changelog, hotfixes |
