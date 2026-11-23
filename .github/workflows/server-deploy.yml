@@ -122,8 +122,9 @@ jobs:
           [ "$code" = 201 ] || fail "report returned $code"; echo "[PASS] report with photo accepted"
           url=$(echo "$resp" | head -n -1 | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("issue") or d)["photo_url"])')
           case "$url" in "http://$CF_HOST/uploads/"*) ;; *) fail "photo URL $url" ;; esac
-          curl -fsS -H "Host: $CF_HOST" -o /tmp/back.jpg "http://127.0.0.1/uploads/${url##*/}" && file /tmp/back.jpg | grep -q JPEG \
-            || fail "photo not served"; echo "[PASS] photo served through Caddy at $url"
+          curl -fsS -H "Host: $CF_HOST" -o /tmp/back.jpg "http://127.0.0.1/uploads/${url##*/}" || fail "photo not served"
+          file /tmp/back.jpg | grep -q JPEG || fail "served photo is not a JPEG"
+          echo "[PASS] photo served through Caddy at $url"
 
       - name: Re-run keeps secrets, data and the admin account
         run: |
@@ -162,7 +163,7 @@ jobs:
         run: |
           mkdir -p /tmp/edge/sites
           cp edge/medical-claim-ai/deploy/Caddyfile /tmp/edge/Caddyfile
-          sudo sed "s#^http://$CF_HOST {#civicfix.130-210-5-71.sslip.io {#" /opt/caddy-sites/civicfix.caddy > /tmp/edge/sites/civicfix.caddy
+          sed "s#^http://$CF_HOST {#civicfix.130-210-5-71.sslip.io {#" /opt/caddy-sites/civicfix.caddy > /tmp/edge/sites/civicfix.caddy
           grep -q '^civicfix.130-210-5-71.sslip.io {' /tmp/edge/sites/civicfix.caddy
           docker run --rm -e SITE_ADDRESS=130-210-5-71.sslip.io -v /tmp/edge/Caddyfile:/etc/caddy/Caddyfile:ro \
             -v /tmp/edge/sites:/etc/caddy/sites:ro caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
@@ -179,8 +180,11 @@ jobs:
         run: |
           sudo BACKUP_DIR=/tmp/cf-backups APP_DIR="$GITHUB_WORKSPACE" deploy/backup.sh
           dump=$(sudo sh -c 'ls /tmp/cf-backups/db-*.dump' | head -1)
-          sudo cat "$dump" | docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml exec -T civicfix-db \
-            pg_restore --list | grep -q "TABLE DATA public photos" && echo "[PASS] dump contains the photos table"
+          sudo cat "$dump" | sudo docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml exec -T civicfix-db \
+            pg_restore --list > restore-list.txt
+          grep -q "TABLE DATA public photos" restore-list.txt || { echo "[FAIL] photos table missing from dump"; exit 1; }
+          grep -q "TABLE DATA public issues" restore-list.txt || { echo "[FAIL] issues table missing from dump"; exit 1; }
+          echo "[PASS] dump contains issues and photos"
 
       - name: Memory use
         if: always()
