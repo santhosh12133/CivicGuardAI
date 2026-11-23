@@ -189,11 +189,18 @@ jobs:
       - name: Screenshot previews
         if: always()
         run: |
-          command -v ffmpeg >/dev/null || { echo "ffmpeg not available"; exit 0; }
-          for shot in mobile-e2e-results/*.png; do
-            [ -f "$shot" ] || continue
-            echo "SCREENSHOT $(basename "$shot" .png) $(ffmpeg -loglevel error -i "$shot" -vf scale=360:-2 -q:v 5 -f mjpeg - | base64 -w0)"
-          done
+          python3 -m pip install --quiet --user pillow || { echo "Pillow not available"; exit 0; }
+          python3 - <<'PY'
+          import base64, glob, io, os
+          from PIL import Image
+          for path in sorted(glob.glob("mobile-e2e-results/*.png")):
+              image = Image.open(path).convert("RGB")
+              image.thumbnail((360, 800))
+              buffer = io.BytesIO()
+              image.save(buffer, "JPEG", quality=70)
+              name = os.path.splitext(os.path.basename(path))[0]
+              print("SCREENSHOT", name, base64.b64encode(buffer.getvalue()).decode())
+          PY
 
       - uses: actions/upload-artifact@v4
         if: always()
