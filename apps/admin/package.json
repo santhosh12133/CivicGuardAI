@@ -14,10 +14,13 @@
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^7.3.5",
     "@mui/material": "^7.3.5",
+    "@mui/x-charts": "~8.17.0",
     "@mui/x-data-grid": "^8.17.0",
     "axios": "^1.13.2",
+    "leaflet": "^1.9.4",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.9.5"
   },
   "devDependencies": {
