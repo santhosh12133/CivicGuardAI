@@ -193,7 +193,11 @@ jobs:
           python3 - <<'PY'
           import base64, glob, io, os
           from PIL import Image
-          for path in sorted(glob.glob("mobile-e2e-results/*.png")):
+          paths = sorted(glob.glob("mobile-e2e-results/**/*.png", recursive=True))
+          print(f"{len(paths)} screenshots")
+          for path in paths:
+              if "/debug-" in path and "screenshot-" in os.path.basename(path):
+                  continue  # Maestro's own failure captures
               image = Image.open(path).convert("RGB")
               image.thumbnail((360, 800))
               buffer = io.BytesIO()
