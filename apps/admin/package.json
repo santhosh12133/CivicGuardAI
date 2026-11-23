@@ -15,7 +15,7 @@
     "@mui/icons-material": "^7.3.5",
     "@mui/material": "^7.3.5",
     "@mui/x-charts": "~8.17.0",
-    "@mui/x-data-grid": "^8.17.0",
+    "@mui/x-data-grid": "^9.18.0",
     "axios": "^1.13.2",
     "leaflet": "^1.9.4",
     "react": "^19.1.1",
