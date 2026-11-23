@@ -32,7 +32,7 @@ permissions:
   contents: read
 
 env:
-  MEDICAL_REF: ${{ inputs.medical_ref || 'deploy/shared-caddy' }}  # TEMP: switch back to main after merging
+  MEDICAL_REF: ${{ inputs.medical_ref || 'main' }}
   CF_HOST: civicfix.localhost
   CREDS: /root/civicfix-credentials.txt
 
