@@ -181,7 +181,7 @@ jobs:
           sudo BACKUP_DIR=/tmp/cf-backups APP_DIR="$GITHUB_WORKSPACE" deploy/backup.sh
           dump=$(sudo sh -c 'ls /tmp/cf-backups/db-*.dump' | head -1)
           sudo cat "$dump" | sudo docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml exec -T civicfix-db \
-            pg_restore --list > restore-list.txt
+            pg_restore --list | tee restore-list.txt > /dev/null
           grep -q "TABLE DATA public photos" restore-list.txt || { echo "[FAIL] photos table missing from dump"; exit 1; }
           grep -q "TABLE DATA public issues" restore-list.txt || { echo "[FAIL] issues table missing from dump"; exit 1; }
           echo "[PASS] dump contains issues and photos"
