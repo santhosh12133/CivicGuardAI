@@ -1,0 +1,111 @@
+# CivicFix with Docker Compose: PostgreSQL, the API and the admin portal.
+#
+# On a server, use deploy/setup-server.sh (it adds deploy/docker-compose.prod.yml and HTTPS through Caddy).
+# Locally: create .env with at least POSTGRES_PASSWORD and JWT_SECRET (see deploy/env.example), then
+#   docker compose up -d --build
+# and open http://127.0.0.1:8080 (portal) and http://127.0.0.1:5000/health (API).
+# Ports are bound to 127.0.0.1 only, so nothing here is reachable from the network.
+name: civicfix
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  civicfix-db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: civicfix
+      POSTGRES_USER: civicfix
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - civicfix_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U civicfix -d civicfix"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    logging: *logging
+
+  civicfix-api:
+    build:
+      context: ./apps/api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "5000"
+      NODE_OPTIONS: --max-old-space-size=384
+      DATABASE_URL: postgres://civicfix:${POSTGRES_PASSWORD}@civicfix-db:5432/civicfix
+      DB_SYNC: "true"
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://127.0.0.1:8080}
+      API_HOST: ${API_HOST:-127.0.0.1:5000}
+      API_PROTOCOL: ${API_PROTOCOL:-http}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-}
+      ADMIN_URL: ${ADMIN_URL:-}
+      GEOCODING_ENABLED: ${GEOCODING_ENABLED:-true}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-300}
+      AUTH_RATE_LIMIT_MAX: ${AUTH_RATE_LIMIT_MAX:-30}
+      # Optional sign-in methods (off unless set; see docs/reference/configuration.md)
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      SMS_PROVIDER: ${SMS_PROVIDER:-}
+      SMS_SENDER_ID: ${SMS_SENDER_ID:-}
+      SMS_ENTITY_ID: ${SMS_ENTITY_ID:-}
+      SMS_TEMPLATE_ID: ${SMS_TEMPLATE_ID:-}
+      AWS_REGION: ${AWS_REGION:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+    volumes:
+      - civicfix_uploads:/app/uploads
+    ports:
+      - "127.0.0.1:5000:5000"
+    depends_on:
+      civicfix-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    logging: *logging
+
+  civicfix-admin:
+    build:
+      context: ./apps/admin
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://127.0.0.1:5000/api}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      civicfix-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+    logging: *logging
+
+volumes:
+  civicfix_db:
+  civicfix_uploads:

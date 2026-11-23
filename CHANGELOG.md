@@ -6,6 +6,7 @@ All notable changes to CivicFix are recorded here. The format follows [Keep a Ch
 
 ### Added
 
+- **Docker Compose deployment** for a shared server (`docker-compose.yml`, `deploy/docker-compose.prod.yml`, `deploy/setup-server.sh`, `deploy/backup.sh`), served through another app's Caddy over the `caddy-shared` network; admin portal Docker image. Tested on x86_64 and arm64 in CI.
 - **Sign-in:** phone number + SMS code (Amazon SNS, India DLT), Sign in with Google, and "Forgot password" with an emailed code (Amazon SES), in both the admin portal and the app. Each method switches on only when configured (`GET /api/auth/providers`).
 - **Secure sessions:** 15-minute access tokens, rotating refresh tokens with reuse detection, server-side sign-out, "sign out everywhere", other devices signed out after a password change, account lockout after five wrong passwords, stricter rate limit on sign-in endpoints.
 - **Features:** issue categories with filters; My Reports; reporter shown to staff; public updates timeline with staff notes and resolution photos; admin overview statistics; staff management (add with one-time password, change role, reset password); change password in portal and app; server address setting in the app.

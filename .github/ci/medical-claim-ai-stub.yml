@@ -1,0 +1,17 @@
+# CI only: run Medical Claim AI's real Caddy (its docker-compose.prod.yml + Caddyfile) with tiny stand-ins for
+# its API and website, so CivicFix can be tested behind it without building the medical app.
+services:
+  api:
+    build: !reset null
+    image: nginx:1.27-alpine
+    command: ["sh", "-c", "printf 'server { listen 8000; location / { default_type text/plain; return 200 \"mca-api\"; } }' > /etc/nginx/conf.d/default.conf && exec nginx -g 'daemon off;'"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8000/health/ready"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 2s
+  frontend:
+    build: !reset null
+    image: nginx:1.27-alpine
+    command: ["sh", "-c", "printf 'server { listen 80; location / { default_type text/plain; return 200 \"mca-web\"; } }' > /etc/nginx/conf.d/default.conf && exec nginx -g 'daemon off;'"]

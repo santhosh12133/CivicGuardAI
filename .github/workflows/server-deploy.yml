@@ -1,0 +1,193 @@
+name: Server deploy
+
+# Runs CivicFix exactly as deploy/setup-server.sh installs it on the Oracle server, behind Medical Claim AI's
+# real Caddy configuration (shared network + imported site file), on x86_64 and on arm64 (like Oracle Ampere A1).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "deploy/**"
+      - "docker-compose.yml"
+      - "apps/api/**"
+      - "apps/admin/**"
+      - ".github/workflows/server-deploy.yml"
+      - ".github/ci/**"
+  pull_request:
+    paths:
+      - "deploy/**"
+      - "docker-compose.yml"
+      - "apps/api/Dockerfile"
+      - "apps/admin/Dockerfile"
+      - "apps/admin/nginx.conf"
+      - ".github/workflows/server-deploy.yml"
+      - ".github/ci/**"
+  workflow_dispatch:
+    inputs:
+      medical_ref:
+        description: medical-claim-ai branch to test against
+        default: main
+
+permissions:
+  contents: read
+
+env:
+  MEDICAL_REF: ${{ inputs.medical_ref || 'deploy/shared-caddy' }}  # TEMP: switch back to main after merging
+  CF_HOST: civicfix.localhost
+  CREDS: /root/civicfix-credentials.txt
+
+jobs:
+  behind-shared-caddy:
+    name: Behind shared Caddy (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check out Medical Claim AI (${{ env.MEDICAL_REF }})
+        uses: actions/checkout@v5
+        with:
+          repository: santhosh12133/medical-claim-ai
+          ref: ${{ env.MEDICAL_REF }}
+          path: edge/medical-claim-ai
+
+      - name: ShellCheck
+        run: shellcheck -S warning deploy/*.sh
+
+      - name: Start Medical Claim AI's Caddy (real config, stand-in app)
+        working-directory: edge/medical-claim-ai
+        env:
+          SECRET_KEY: ci-only-secret
+          SITE_ADDRESS: ":80"
+        run: |
+          # What medical-claim-ai's setup-server.sh prepares for shared hosting
+          docker network inspect caddy-shared >/dev/null 2>&1 || docker network create caddy-shared
+          sudo mkdir -p /opt/caddy-sites
+          docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml \
+            -f "$GITHUB_WORKSPACE/.github/ci/medical-claim-ai-stub.yml" up -d --wait caddy
+          for _ in $(seq 1 20); do curl -fsS http://127.0.0.1/api/health/ready && break; sleep 2; done
+          [ "$(curl -fsS http://127.0.0.1/api/health/ready)" = mca-api ]
+          [ "$(curl -fsS http://127.0.0.1/)" = mca-web ]
+
+      - name: Install CivicFix with deploy/setup-server.sh
+        run: >-
+          sudo bash deploy/setup-server.sh --site-address "http://$CF_HOST" --app-dir "$GITHUB_WORKSPACE"
+          --no-update --admin-email Admin@Example.com --admin-name "CI Admin" | tee install.log
+
+      - name: Verify both sites through Caddy
+        run: |
+          fail() { echo "[FAIL] $1"; exit 1; }
+          cf() { curl -fsS -H "Host: $CF_HOST" "http://127.0.0.1$1"; }
+          cf /health | grep -q '"database":"ok"' || fail "CivicFix health"; echo "[PASS] CivicFix API healthy through Caddy"
+          cf /api/auth/providers | grep -q '"password":true' || fail "providers"; echo "[PASS] /api routed to the API"
+          cf / | grep -q '<title>CivicFix Admin</title>' || fail "portal"; echo "[PASS] / routed to the admin portal"
+          cf /issues | grep -q '<title>CivicFix Admin</title>' || fail "SPA fallback"; echo "[PASS] portal routes fall back to index.html"
+          [ "$(curl -fsS http://127.0.0.1/api/health/ready)" = mca-api ] || fail "medical API"
+          [ "$(curl -fsS http://127.0.0.1/)" = mca-web ] || fail "medical website"; echo "[PASS] Medical Claim AI site unchanged"
+          ports=$(docker ps --filter label=com.docker.compose.project=civicfix --format '{{.Names}} {{.Ports}}')
+          echo "$ports"
+          ! echo "$ports" | grep -q -- '->' || fail "CivicFix publishes a port"; echo "[PASS] CivicFix publishes no ports"
+          sudo stat -c '%a %U' .env | grep -qx '600 root' || fail ".env not root-only"; echo "[PASS] .env is 600 root"
+          ! grep -E -q "$(sudo sed -n 's/^\(JWT_SECRET\|POSTGRES_PASSWORD\)=//p' .env | paste -sd'|')" install.log \
+            || fail "a secret was printed"; echo "[PASS] secrets not printed"
+          pw=$(sudo sed -n 's/.*admin  admin@example.com  password: //p' "$CREDS")
+          [ -n "$pw" ] || fail "no admin password saved"; echo "::add-mask::$pw"
+          ! grep -q -- "$pw" install.log || fail "admin password printed"; echo "[PASS] admin password saved, not printed"
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $CF_HOST" -H 'Content-Type: application/json' \
+            -X POST http://127.0.0.1/api/auth/login -d "{\"email\":\"admin@example.com\",\"password\":\"$pw\"}")
+          [ "$code" = 200 ] || fail "admin login returned $code"; echo "[PASS] admin can sign in through Caddy"
+
+      - name: Report an issue with a fresh photo (evidence checks inside the container)
+        run: |
+          fail() { echo "[FAIL] $1"; exit 1; }
+          sudo apt-get install -y -qq libimage-exiftool-perl >/dev/null
+          cp apps/api/test/fixtures/pothole.jpg /tmp/photo.jpg
+          exiftool -q -overwrite_original -Make=CI -Model=Runner \
+            -DateTimeOriginal="$(date -u -d '-5 minutes' '+%Y:%m:%d %H:%M:%S')" -OffsetTimeOriginal=+00:00 \
+            -GPSLatitude=12.9716 -GPSLatitudeRef=N -GPSLongitude=77.5946 -GPSLongitudeRef=E /tmp/photo.jpg
+          token=$(curl -fsS -H "Host: $CF_HOST" -H 'Content-Type: application/json' -X POST http://127.0.0.1/api/auth/register \
+            -d '{"name":"CI Citizen","email":"citizen@example.com","password":"citizen-pass-123"}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
+          resp=$(curl -sS -w '\n%{http_code}' -H "Host: $CF_HOST" -H "Authorization: Bearer $token" -X POST http://127.0.0.1/api/issues \
+            -F title="Pothole near the bus stop" -F description="Deep pothole" -F category=pothole \
+            -F latitude=12.9716 -F longitude=77.5946 -F image=@/tmp/photo.jpg)
+          code=$(echo "$resp" | tail -1); echo "$resp" | head -c 400; echo
+          [ "$code" = 201 ] || fail "report returned $code"; echo "[PASS] report with photo accepted"
+          url=$(echo "$resp" | head -n -1 | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("issue") or d)["photo_url"])')
+          case "$url" in "http://$CF_HOST/uploads/"*) ;; *) fail "photo URL $url" ;; esac
+          curl -fsS -H "Host: $CF_HOST" -o /tmp/back.jpg "http://127.0.0.1/uploads/${url##*/}" && file /tmp/back.jpg | grep -q JPEG \
+            || fail "photo not served"; echo "[PASS] photo served through Caddy at $url"
+
+      - name: Re-run keeps secrets, data and the admin account
+        run: |
+          fail() { echo "[FAIL] $1"; exit 1; }
+          before=$(sudo grep -E '^(POSTGRES_PASSWORD|JWT_SECRET)=' .env | sha256sum)
+          sudo bash deploy/setup-server.sh --site-address "http://$CF_HOST" --app-dir "$GITHUB_WORKSPACE" \
+            --no-update --admin-email admin@example.com | tee rerun.log
+          after=$(sudo grep -E '^(POSTGRES_PASSWORD|JWT_SECRET)=' .env | sha256sum)
+          [ "$before" = "$after" ] || fail "secrets changed"; echo "[PASS] secrets unchanged"
+          grep -q "already exists; password unchanged" rerun.log || fail "admin account not kept"
+          [ "$(sudo grep -c ' admin ' "$CREDS")" = 1 ] || fail "second password issued"; echo "[PASS] admin account kept"
+          curl -fsS -H "Host: $CF_HOST" "http://127.0.0.1/api/issues" | grep -q "Pothole near the bus stop" \
+            || fail "issue lost"; echo "[PASS] data kept"
+
+      - name: Isolation between the two apps
+        run: |
+          fail() { echo "[FAIL] $1"; exit 1; }
+          CF=(docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml)
+          C=$(docker ps -q --filter label=com.docker.compose.project=medical-claim-ai --filter label=com.docker.compose.service=caddy)
+          sudo "${CF[@]}" stop civicfix-api civicfix-admin
+          [ "$(curl -fsS http://127.0.0.1/api/health/ready)" = mca-api ] || fail "medical broken while CivicFix is down"
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $CF_HOST" http://127.0.0.1/health)
+          [ "$code" = 502 ] || fail "expected 502 for stopped CivicFix, got $code"; echo "[PASS] CivicFix down: only its address fails"
+          sudo "${CF[@]}" start civicfix-api civicfix-admin
+          sudo "${CF[@]}" up -d --wait --wait-timeout 180
+          docker restart "$C" >/dev/null
+          for _ in $(seq 1 20); do curl -fsS -H "Host: $CF_HOST" http://127.0.0.1/health >/dev/null 2>&1 && break; sleep 2; done
+          curl -fsS -H "Host: $CF_HOST" http://127.0.0.1/health | grep -q '"database":"ok"' || fail "CivicFix gone after Caddy restart"
+          [ "$(curl -fsS http://127.0.0.1/api/health/ready)" = mca-api ] || fail "medical after restart"
+          echo "[PASS] both sites survive a Caddy restart"
+          # medical-claim-ai's own service names (api, frontend) must still resolve to its containers only
+          [ "$(docker exec "$C" wget -qO- http://api:8000/x)" = mca-api ] || fail "name clash on api"
+          echo "[PASS] no service-name clash on the shared network"
+
+      - name: Production-shaped Caddy config is valid (real HTTPS addresses)
+        run: |
+          mkdir -p /tmp/edge/sites
+          cp edge/medical-claim-ai/deploy/Caddyfile /tmp/edge/Caddyfile
+          sudo sed "s#^http://$CF_HOST {#civicfix.130-210-5-71.sslip.io {#" /opt/caddy-sites/civicfix.caddy > /tmp/edge/sites/civicfix.caddy
+          grep -q '^civicfix.130-210-5-71.sslip.io {' /tmp/edge/sites/civicfix.caddy
+          docker run --rm -e SITE_ADDRESS=130-210-5-71.sslip.io -v /tmp/edge/Caddyfile:/etc/caddy/Caddyfile:ro \
+            -v /tmp/edge/sites:/etc/caddy/sites:ro caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          docker run --rm -e SITE_ADDRESS=130-210-5-71.sslip.io -v /tmp/edge/Caddyfile:/etc/caddy/Caddyfile:ro \
+            -v /tmp/edge/sites:/etc/caddy/sites:ro caddy:2-alpine caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile \
+            | python3 -c 'import json,sys; c=json.load(sys.stdin); hosts=sorted(h for s in c["apps"]["http"]["servers"].values() for r in s.get("routes",[]) for m in r.get("match",[]) for h in m.get("host",[])); print(hosts); assert hosts==["130-210-5-71.sslip.io","civicfix.130-210-5-71.sslip.io"], hosts'
+          echo "[PASS] both HTTPS sites in one valid configuration"
+          rm -f /tmp/edge/sites/*
+          docker run --rm -e SITE_ADDRESS=130-210-5-71.sslip.io -v /tmp/edge/Caddyfile:/etc/caddy/Caddyfile:ro \
+            -v /tmp/edge/sites:/etc/caddy/sites:ro caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          echo "[PASS] valid with no extra sites"
+
+      - name: Backup
+        run: |
+          sudo BACKUP_DIR=/tmp/cf-backups APP_DIR="$GITHUB_WORKSPACE" deploy/backup.sh
+          dump=$(sudo sh -c 'ls /tmp/cf-backups/db-*.dump' | head -1)
+          sudo cat "$dump" | docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml exec -T civicfix-db \
+            pg_restore --list | grep -q "TABLE DATA public photos" && echo "[PASS] dump contains the photos table"
+
+      - name: Memory use
+        if: always()
+        run: docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}\t{{.CPUPerc}}'
+
+      - name: Logs
+        if: failure()
+        run: |
+          sudo docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml logs --no-color --tail 150 || true
+          docker logs --tail 80 "$(docker ps -aq --filter label=com.docker.compose.service=caddy | head -1)" || true
